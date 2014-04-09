@@ -42,6 +42,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
+#include <sys/stat.h>
 #ifdef HAVE_SYSLOG
 #include <syslog.h>
 #endif
@@ -75,10 +76,21 @@ struct unsharedfs_state {
 // return 0/false on overflow
 static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 {
-	int success = ( PATH_MAX > snprintf(fpath,PATH_MAX,"%s/%d%s",PRIVATE_DATA->rootdir,fuse_get_context()->uid,path) );
-	if (!success)
+	struct stat sb;
+	if ( PATH_MAX <= snprintf(fpath,PATH_MAX,"%s/%d%s",PRIVATE_DATA->rootdir,fuse_get_context()->uid,path) )
+	{
 		LOG(LOG_ERR,"Long path truncated: %s",path);
-	return success;
+		errno = ENAMETOOLONG;
+		return 0;
+	}
+	if ( stat(fpath,&sb) != 0 )
+	{
+		// TODO: allow fallback to default
+		LOG(LOG_WARNING,"missing directory: %s",fpath);
+		errno = EBUSY;
+		return 0;
+	}
+	return 1;
 }
 
 /**
@@ -158,7 +170,7 @@ int unsharedfs_getattr(const char *path, struct stat *statbuf)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = lstat(fpath, statbuf);
@@ -187,7 +199,7 @@ int unsharedfs_readlink(const char *path, char *link, size_t size)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = readlink(fpath, link, size - 1);
@@ -214,7 +226,7 @@ int unsharedfs_mknod(const char *path, mode_t mode, dev_t dev)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	// On Linux this could just be 'mknod(path, mode, rdev)' but this
@@ -250,7 +262,7 @@ int unsharedfs_mkdir(const char *path, mode_t mode)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = mkdir(fpath, mode);
@@ -268,7 +280,7 @@ int unsharedfs_unlink(const char *path)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = unlink(fpath);
@@ -286,7 +298,7 @@ int unsharedfs_rmdir(const char *path)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = rmdir(fpath);
@@ -308,7 +320,7 @@ int unsharedfs_symlink(const char *path, const char *link)
 	char flink[PATH_MAX];
 
 	if (!unsharedfs_fullpath(flink, link))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = symlink(path, flink);
@@ -328,9 +340,9 @@ int unsharedfs_rename(const char *path, const char *newpath)
 	char fnewpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = rename(fpath, fnewpath);
@@ -348,9 +360,9 @@ int unsharedfs_link(const char *path, const char *newpath)
 	char fpath[PATH_MAX], fnewpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = link(fpath, fnewpath);
@@ -368,7 +380,7 @@ int unsharedfs_chmod(const char *path, mode_t mode)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = chmod(fpath, mode);
@@ -387,7 +399,7 @@ int unsharedfs_chown(const char *path, uid_t uid, gid_t gid)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = chown(fpath, uid, gid);
@@ -405,7 +417,7 @@ int unsharedfs_truncate(const char *path, off_t newsize)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = truncate(fpath, newsize);
@@ -424,7 +436,7 @@ int unsharedfs_utime(const char *path, struct utimbuf *ubuf)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = utime(fpath, ubuf);
@@ -452,7 +464,7 @@ int unsharedfs_open(const char *path, struct fuse_file_info *fi)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	fd = open(fpath, fi->flags);
@@ -534,7 +546,7 @@ int unsharedfs_statfs(const char *path, struct statvfs *statv)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	// get stats for underlying filesystem
@@ -605,7 +617,7 @@ int unsharedfs_setxattr(const char *path, const char *name, const char *value, s
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = lsetxattr(fpath, name, value, size, flags);
@@ -623,7 +635,7 @@ int unsharedfs_getxattr(const char *path, const char *name, char *value, size_t 
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = lgetxattr(fpath, name, value, size);
@@ -641,7 +653,7 @@ int unsharedfs_listxattr(const char *path, char *list, size_t size)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = llistxattr(fpath, list, size);
@@ -659,7 +671,7 @@ int unsharedfs_removexattr(const char *path, const char *name)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = lremovexattr(fpath, name);
@@ -684,7 +696,7 @@ int unsharedfs_opendir(const char *path, struct fuse_file_info *fi)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	dp = opendir(fpath);
@@ -834,7 +846,7 @@ int unsharedfs_access(const char *path, int mask)
 	char fpath[PATH_MAX];
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	retstat = access(fpath, mask);
@@ -865,7 +877,7 @@ int unsharedfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	int fd;
 
 	if (!unsharedfs_fullpath(fpath, path))
-		return -ENAMETOOLONG;
+		return -errno;
 
 	unsharedfs_take_context_id();
 	fd = creat(fpath, mode);
