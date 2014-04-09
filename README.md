@@ -33,6 +33,20 @@ mkdir /unshared/$theUID
 chown userB /unshared/$theUID
 ```
 
+or, if you prefer for loops in bash:
+```
+rootdir=/unshared
+for user in userA userB
+do
+	if theuid=`id -u "$user"`
+	then
+		mkdir "$rootdir/$theuid"
+		chown "$user" "$rootdir/$theuid"
+	fi
+done
+```
+
+
 After this, you can mount the unshared file system:
 
 ```
