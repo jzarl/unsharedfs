@@ -65,6 +65,7 @@ struct unsharedfs_state {
 	uid_t base_uid;
 	gid_t base_gid;
     char *rootdir;
+	char *defaultdir;
 };
 #define PRIVATE_DATA ((struct unsharedfs_state *) fuse_get_context()->private_data)
 
@@ -77,19 +78,56 @@ struct unsharedfs_state {
 static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 {
 	struct stat sb;
-	if ( PATH_MAX <= snprintf(fpath,PATH_MAX,"%s/%d%s",PRIVATE_DATA->rootdir,fuse_get_context()->uid,path) )
+	size_t pathlen;
+	// assemble "base" directory:
+	pathlen = snprintf(fpath,PATH_MAX,"%s/%d",PRIVATE_DATA->rootdir,fuse_get_context()->uid);
+	if ( pathlen >= PATH_MAX )
 	{
 		LOG(LOG_ERR,"Long path truncated: %s",path);
 		errno = ENAMETOOLONG;
 		return 0;
 	}
+	// does base directory exist?
 	if ( stat(fpath,&sb) != 0 )
 	{
-		// TODO: allow fallback to default
-		LOG(LOG_WARNING,"missing directory: %s",fpath);
+		// is a fallback directory defined?
+		if (PRIVATE_DATA->defaultdir)
+		{ // no uid check in this case
+			if (PATH_MAX <= snprintf(fpath,PATH_MAX,"%s/%s%s",PRIVATE_DATA->rootdir,PRIVATE_DATA->defaultdir,path) )
+			{
+				LOG(LOG_ERR,"Long path truncated: %s",path);
+				errno = ENAMETOOLONG;
+				return 0;
+			}
+			return 1;
+		}
+		LOG(LOG_WARNING,"missing directory: %s/%d",PRIVATE_DATA->rootdir,fuse_get_context()->uid);
 		errno = EBUSY;
 		return 0;
 	}
+	// base directory is a directory?
+	if ( ! (S_IFDIR & sb.st_mode) )
+	{
+		LOG(LOG_ERR,"not a directory: %s/%d",PRIVATE_DATA->rootdir,fuse_get_context()->uid);
+		errno = ENOTDIR;
+		return 0;
+	}
+	// uid matches owner?
+	if ( fuse_get_context()->uid != sb.st_uid )
+	{
+		// pin name to uid:
+		LOG(LOG_ERR,"directory name does not match owner: %s/%d (owner: %d)",PRIVATE_DATA->rootdir,fuse_get_context()->uid,sb.st_uid);
+		errno = EACCES;
+		return 0;
+	}
+	// add "path" component:
+	if (strlen(path) + pathlen + 1 >= PATH_MAX)
+	{
+		LOG(LOG_ERR,"path too long: %s%s",fpath,path);
+		errno = ENAMETOOLONG;
+		return 0;
+	}
+	strncat(fpath,path,PATH_MAX-1-pathlen);
 	return 1;
 }
 
@@ -1017,6 +1055,9 @@ int main(int argc, char *argv[])
 	argv[argc-2] = argv[argc-1];
 	argv[argc-1] = NULL;
 	argc--;
+
+	// TODO: allow setting of default dir:
+	pdata->defaultdir = 0;
 
 	if ( getuid() != 0 && geteuid() != 0 )
 	{
