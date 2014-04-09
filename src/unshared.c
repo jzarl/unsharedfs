@@ -42,6 +42,20 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
+#ifdef HAVE_SYSLOG
+#include <syslog.h>
+#endif
+
+#ifdef HAVE_SYSLOG
+#	define LOG(prio, fmt, ...) syslog((prio),(fmt),(__VA_ARGS__))
+#else
+#	define LOG_DEBUG
+#	define LOG_INFO
+#	define LOG_NOTICE
+#	define LOG_WARNING
+#	define LOG_ERR
+#	define LOG(prio, fmt, ...) fprintf(stderr,(fmt),(__VA_ARGS__))
+#endif
 
 // maintain unsharedfs state in here
 struct unsharedfs_state {
@@ -59,7 +73,10 @@ struct unsharedfs_state {
 // return 0/false on overflow
 static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 {
-	return ( PATH_MAX > snprintf(fpath,PATH_MAX,"%s/%d%s",PRIVATE_DATA->rootdir,fuse_get_context()->uid,path) );
+	int success = ( PATH_MAX > snprintf(fpath,PATH_MAX,"%s/%d%s",PRIVATE_DATA->rootdir,fuse_get_context()->uid,path) );
+	if (!success)
+		LOG(LOG_ERR,"Long path truncated: %s",path);
+	return success;
 }
 
 /**
@@ -67,16 +84,20 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
  */
 static void take_context_id()
 {
-	seteuid(fuse_get_context()->uid);
-	setegid(fuse_get_context()->gid);
+	if ( seteuid(fuse_get_context()->uid) != 0 )
+		LOG(LOG_WARNING,"take_context_id: failed to set euid to %d",fuse_get_context()->uid);
+	if ( setegid(fuse_get_context()->gid) != 0)
+		LOG(LOG_WARNING,"take_context_id: failed to set egid to %d",fuse_get_context()->gid);
 }
 /**
  * Drop the uid/gid of the current context.
  */
 static void drop_context_id()
 {
-	seteuid(PRIVATE_DATA->base_uid);
-	setegid(PRIVATE_DATA->base_gid);
+	if ( seteuid(PRIVATE_DATA->base_uid) != 0)
+		LOG(LOG_WARNING,"drop_context_id: failed to set euid to %d",PRIVATE_DATA->base_uid);
+	if ( setegid(PRIVATE_DATA->base_gid) != 0)
+		LOG(LOG_WARNING,"drop_context_id: failed to set egid to %d",PRIVATE_DATA->base_gid);
 }
 
 ///////////////////////////////////////////////////////////
@@ -722,7 +743,9 @@ int unsharedfs_releasedir(const char *path, struct fuse_file_info *fi)
 // FUSE).
 void *unsharedfs_init(struct fuse_conn_info *conn)
 {
-
+#ifdef HAVE_SYSLOG
+	openlog("unsharedfs",LOG_PID,LOG_USER);
+#endif
 	return PRIVATE_DATA;
 }
 
@@ -735,6 +758,9 @@ void *unsharedfs_init(struct fuse_conn_info *conn)
  */
 void unsharedfs_destroy(void *userdata)
 {
+#ifdef HAVE_SYSLOG
+	closelog();
+#endif
 }
 
 /**
