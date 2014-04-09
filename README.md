@@ -59,3 +59,10 @@ Otherwise, the FUSE file system does not know the UID of the user that is
 accessing the mountpoint, and all access will be redirected to the
 UID-directory of the user that *mounted* the file system.
 
+
+Installation
+------------
+
+1. make
+2. make install PREFIX=/some/prefix
+
