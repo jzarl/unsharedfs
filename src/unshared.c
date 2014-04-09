@@ -18,7 +18,7 @@
  * His code is licensed under the LGPLv2.
  * A copy of that code is included in the file fuse.h
  * 
- * gcc -Wall `pkg-config fuse --cflags --libs` -o bbfs bbfs.c
+ * gcc -Wall `pkg-config fuse --cflags --libs` -o unshared unshared.c
  */
 
 // The FUSE API has been changed a number of times.  So, our code
@@ -47,15 +47,17 @@
 #endif
 
 #ifdef HAVE_SYSLOG
-#	define LOG(prio, fmt, ...) syslog((prio),(fmt),(__VA_ARGS__))
+#	define LOG(prio, fmt, ...) syslog((prio),(fmt),__VA_ARGS__)
 #else
 #	define LOG_DEBUG
 #	define LOG_INFO
 #	define LOG_NOTICE
 #	define LOG_WARNING
 #	define LOG_ERR
-#	define LOG(prio, fmt, ...) fprintf(stderr,(fmt),(__VA_ARGS__))
+#	define LOG(prio, fmt, ...) fprintf(stderr,(fmt),__VA_ARGS__)
 #endif
+
+#define ERRMSG_MAX 5
 
 // maintain unsharedfs state in here
 struct unsharedfs_state {
@@ -84,10 +86,29 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
  */
 static void take_context_id()
 {
-	if ( seteuid(fuse_get_context()->uid) != 0 )
-		LOG(LOG_WARNING,"take_context_id: failed to set euid to %d",fuse_get_context()->uid);
+	// Set gid first, because we won't be able after setting the uid.
 	if ( setegid(fuse_get_context()->gid) != 0)
-		LOG(LOG_WARNING,"take_context_id: failed to set egid to %d",fuse_get_context()->gid);
+	{
+		char errmsg[ERRMSG_MAX];
+		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
+			errmsg[0] = '\0';
+		LOG(LOG_WARNING,"take_context_id: failed to set egid from %d to %d: %s"
+				,getegid()
+				,fuse_get_context()->gid
+				,errmsg
+		   );
+	}
+	if ( seteuid(fuse_get_context()->uid) != 0 )
+	{
+		char errmsg[ERRMSG_MAX];
+		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
+			errmsg[0] = '\0';
+		LOG(LOG_WARNING,"take_context_id: failed to set euid from %d to %d: %s"
+				,geteuid()
+				,fuse_get_context()->uid
+				,errmsg
+		   );
+	}
 }
 /**
  * Drop the uid/gid of the current context.
@@ -95,9 +116,27 @@ static void take_context_id()
 static void drop_context_id()
 {
 	if ( seteuid(PRIVATE_DATA->base_uid) != 0)
-		LOG(LOG_WARNING,"drop_context_id: failed to set euid to %d",PRIVATE_DATA->base_uid);
+	{
+		char errmsg[ERRMSG_MAX];
+		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
+			errmsg[0] = '\0';
+		LOG(LOG_WARNING,"drop_context_id: failed to set euid from %d to %d: %s"
+				,geteuid()
+				,fuse_get_context()->uid
+				,errmsg
+		   );
+	}
 	if ( setegid(PRIVATE_DATA->base_gid) != 0)
-		LOG(LOG_WARNING,"drop_context_id: failed to set egid to %d",PRIVATE_DATA->base_gid);
+	{
+		char errmsg[ERRMSG_MAX];
+		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
+			errmsg[0] = '\0';
+		LOG(LOG_WARNING,"drop_context_id: failed to set egid from %d to %d: %s"
+				,getegid()
+				,fuse_get_context()->gid
+				,errmsg
+		   );
+	}
 }
 
 ///////////////////////////////////////////////////////////
@@ -743,10 +782,17 @@ int unsharedfs_releasedir(const char *path, struct fuse_file_info *fi)
 // FUSE).
 void *unsharedfs_init(struct fuse_conn_info *conn)
 {
+	struct unsharedfs_state *pdata = PRIVATE_DATA;
 #ifdef HAVE_SYSLOG
 	openlog("unsharedfs",LOG_PID,LOG_USER);
 #endif
-	return PRIVATE_DATA;
+	LOG(LOG_INFO,"initialising unsharedfs with base uid/gid %d/%d at %s"
+			,pdata->base_uid
+			,pdata->base_gid
+			,pdata->rootdir);
+
+
+	return pdata;
 }
 
 /**
@@ -934,8 +980,8 @@ int main(int argc, char *argv[])
 	}
 
 	// save original uid/gid:
-	pdata->base_uid = geteuid();
-	pdata->base_gid = getegid();
+	pdata->base_uid = getuid();
+	pdata->base_gid = getgid();
 
 	// Pull the rootdir out of the argument list and save it in my
 	// internal data
