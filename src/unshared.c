@@ -84,7 +84,7 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 /**
  * Take the uid/gid of the current context.
  */
-static void take_context_id()
+static void unsharedfs_take_context_id()
 {
 	// Set gid first, because we won't be able after setting the uid.
 	if ( setegid(fuse_get_context()->gid) != 0)
@@ -92,7 +92,7 @@ static void take_context_id()
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"take_context_id: failed to set egid from %d to %d: %s"
+		LOG(LOG_WARNING,"unsharedfs_take_context_id: failed to set egid from %d to %d: %s"
 				,getegid()
 				,fuse_get_context()->gid
 				,errmsg
@@ -103,24 +103,25 @@ static void take_context_id()
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"take_context_id: failed to set euid from %d to %d: %s"
+		LOG(LOG_WARNING,"unsharedfs_take_context_id: failed to set euid from %d to %d: %s"
 				,geteuid()
 				,fuse_get_context()->uid
 				,errmsg
 		   );
 	}
+	LOG(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
 }
 /**
  * Drop the uid/gid of the current context.
  */
-static void drop_context_id()
+static void unsharedfs_drop_context_id()
 {
 	if ( seteuid(PRIVATE_DATA->base_uid) != 0)
 	{
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"drop_context_id: failed to set euid from %d to %d: %s"
+		LOG(LOG_WARNING,"unsharedfs_drop_context_id: failed to set euid from %d to %d: %s"
 				,geteuid()
 				,fuse_get_context()->uid
 				,errmsg
@@ -131,12 +132,13 @@ static void drop_context_id()
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"drop_context_id: failed to set egid from %d to %d: %s"
+		LOG(LOG_WARNING,"unsharedfs_drop_context_id: failed to set egid from %d to %d: %s"
 				,getegid()
 				,fuse_get_context()->gid
 				,errmsg
 		   );
 	}
+	LOG(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
 }
 
 ///////////////////////////////////////////////////////////
@@ -158,7 +160,9 @@ int unsharedfs_getattr(const char *path, struct stat *statbuf)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
+	unsharedfs_take_context_id();
 	retstat = lstat(fpath, statbuf);
+	unsharedfs_drop_context_id();
 	if (retstat != 0)
 		retstat = -errno;
 
@@ -185,9 +189,9 @@ int unsharedfs_readlink(const char *path, char *link, size_t size)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = readlink(fpath, link, size - 1);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 	else  {
@@ -212,7 +216,7 @@ int unsharedfs_mknod(const char *path, mode_t mode, dev_t dev)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	// On Linux this could just be 'mknod(path, mode, rdev)' but this
 	//  is more portable
 	if (S_ISREG(mode)) {
@@ -234,7 +238,7 @@ int unsharedfs_mknod(const char *path, mode_t mode, dev_t dev)
 			if (retstat < 0)
 				retstat = -errno;
 		}
-	drop_context_id();
+	unsharedfs_drop_context_id();
 
 	return retstat;
 }
@@ -248,9 +252,9 @@ int unsharedfs_mkdir(const char *path, mode_t mode)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = mkdir(fpath, mode);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -266,9 +270,9 @@ int unsharedfs_unlink(const char *path)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = unlink(fpath);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -284,9 +288,9 @@ int unsharedfs_rmdir(const char *path)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = rmdir(fpath);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -306,9 +310,9 @@ int unsharedfs_symlink(const char *path, const char *link)
 	if (!unsharedfs_fullpath(flink, link))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = symlink(path, flink);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -328,9 +332,9 @@ int unsharedfs_rename(const char *path, const char *newpath)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = rename(fpath, fnewpath);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -348,9 +352,9 @@ int unsharedfs_link(const char *path, const char *newpath)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = link(fpath, fnewpath);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -366,9 +370,9 @@ int unsharedfs_chmod(const char *path, mode_t mode)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = chmod(fpath, mode);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -385,9 +389,9 @@ int unsharedfs_chown(const char *path, uid_t uid, gid_t gid)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = chown(fpath, uid, gid);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -403,9 +407,9 @@ int unsharedfs_truncate(const char *path, off_t newsize)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = truncate(fpath, newsize);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -422,9 +426,9 @@ int unsharedfs_utime(const char *path, struct utimbuf *ubuf)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = utime(fpath, ubuf);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -450,9 +454,9 @@ int unsharedfs_open(const char *path, struct fuse_file_info *fi)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	fd = open(fpath, fi->flags);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (fd < 0)
 		retstat = -errno;
 
@@ -480,11 +484,11 @@ int unsharedfs_read(const char *path, char *buf, size_t size, off_t offset, stru
 {
 	int retstat = 0;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	// 2014-04-07 ZaJ: TODO FIXME: is this correct? what exactly is this one doing???
 	// no need to get fpath on this one, since I work from fi->fh not the path
 	retstat = pread(fi->fh, buf, size, offset);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -506,11 +510,11 @@ int unsharedfs_write(const char *path, const char *buf, size_t size, off_t offse
 {
 	int retstat = 0;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	// 2014-04-07 ZaJ: TODO FIXME: is this correct? what exactly is this one doing???
 	// no need to get fpath on this one, since I work from fi->fh not the path
 	retstat = pwrite(fi->fh, buf, size, offset);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -532,10 +536,10 @@ int unsharedfs_statfs(const char *path, struct statvfs *statv)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	// get stats for underlying filesystem
 	retstat = statvfs(fpath, statv);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -560,12 +564,12 @@ int unsharedfs_release(const char *path, struct fuse_file_info *fi)
 {
 	int retstat = 0;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	// 2014-04-07 ZaJ: TODO FIXME: is this correct?
 	// We need to close the file.  Had we allocated any resources
 	// (buffers etc) we'd need to free them here as well.
 	retstat = close(fi->fh);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 
 	return retstat;
 }
@@ -581,7 +585,7 @@ int unsharedfs_fsync(const char *path, int datasync, struct fuse_file_info *fi)
 {
 	int retstat = 0;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	if (datasync)
 		retstat = fdatasync(fi->fh);
 	else
@@ -589,7 +593,7 @@ int unsharedfs_fsync(const char *path, int datasync, struct fuse_file_info *fi)
 
 	if (retstat < 0)
 		retstat = -errno;
-	drop_context_id();
+	unsharedfs_drop_context_id();
 
 	return retstat;
 }
@@ -603,9 +607,9 @@ int unsharedfs_setxattr(const char *path, const char *name, const char *value, s
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = lsetxattr(fpath, name, value, size, flags);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -621,9 +625,9 @@ int unsharedfs_getxattr(const char *path, const char *name, char *value, size_t 
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = lgetxattr(fpath, name, value, size);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -639,9 +643,9 @@ int unsharedfs_listxattr(const char *path, char *list, size_t size)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = llistxattr(fpath, list, size);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -657,9 +661,9 @@ int unsharedfs_removexattr(const char *path, const char *name)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	retstat = lremovexattr(fpath, name);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -682,9 +686,9 @@ int unsharedfs_opendir(const char *path, struct fuse_file_info *fi)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	dp = opendir(fpath);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 	if (dp == NULL)
 		retstat = -errno;
 
@@ -717,7 +721,8 @@ int unsharedfs_opendir(const char *path, struct fuse_file_info *fi)
 int unsharedfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset,
 		struct fuse_file_info *fi)
 {
-	// 2014-04-07 ZaJ: TODO FIXME does this need take_context_id()? what about unshared_fullpath?
+	unsharedfs_take_context_id();
+	// 2014-04-07 ZaJ: TODO FIXME  what about unshared_fullpath?
 	int retstat = 0;
 	DIR *dp;
 	struct dirent *de;
@@ -732,6 +737,7 @@ int unsharedfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_
 	de = readdir(dp);
 	if (de == 0) {
 		retstat = -errno;
+		unsharedfs_drop_context_id();
 		return retstat;
 	}
 
@@ -741,10 +747,12 @@ int unsharedfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_
 	// read the whole directory; the second means the buffer is full.
 	do {
 		if (filler(buf, de->d_name, NULL, 0) != 0) {
+			unsharedfs_drop_context_id();
 			return -ENOMEM;
 		}
 	} while ((de = readdir(dp)) != NULL);
 
+	unsharedfs_drop_context_id();
 	return retstat;
 }
 
@@ -756,9 +764,9 @@ int unsharedfs_releasedir(const char *path, struct fuse_file_info *fi)
 {
 	int retstat = 0;
 
-	take_context_id();
+	unsharedfs_take_context_id();
 	closedir((DIR *) (uintptr_t) fi->fh);
-	drop_context_id();
+	unsharedfs_drop_context_id();
 
 	return retstat;
 }
@@ -828,7 +836,9 @@ int unsharedfs_access(const char *path, int mask)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
+	unsharedfs_take_context_id();
 	retstat = access(fpath, mask);
+	unsharedfs_drop_context_id();
 
 	if (retstat < 0)
 		retstat = -errno;
@@ -857,7 +867,9 @@ int unsharedfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	if (!unsharedfs_fullpath(fpath, path))
 		return -ENAMETOOLONG;
 
+	unsharedfs_take_context_id();
 	fd = creat(fpath, mode);
+	unsharedfs_drop_context_id();
 	if (fd < 0)
 		retstat = -errno;
 
@@ -882,7 +894,9 @@ int unsharedfs_ftruncate(const char *path, off_t offset, struct fuse_file_info *
 {
 	int retstat = 0;
 
+	unsharedfs_take_context_id();
 	retstat = ftruncate(fi->fh, offset);
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
@@ -908,7 +922,9 @@ int unsharedfs_fgetattr(const char *path, struct stat *statbuf, struct fuse_file
 {
 	int retstat = 0;
 
+	unsharedfs_take_context_id();
 	retstat = fstat(fi->fh, statbuf);
+	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
 
