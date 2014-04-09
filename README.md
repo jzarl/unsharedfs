@@ -6,6 +6,14 @@ access the "same" absolute path without interfering with each other.  Every
 user gets their own individual *view* on the path.
 
 
+IMPORTANT
+---------
+
+Do audit the code before you use it in any security-critical application.  The
+code in its current form **has not been audited** in any form, and likely contains
+bugs that are exploitable by a malicious user!
+
+
 How it works
 ------------
 
