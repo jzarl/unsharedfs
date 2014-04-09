@@ -51,8 +51,6 @@ struct unsharedfs_state {
 };
 #define PRIVATE_DATA ((struct unsharedfs_state *) fuse_get_context()->private_data)
 
-// Check whether the given user is permitted to perform the given operation on the given 
-
 //  All the paths I see are relative to the root of the mounted
 //  filesystem.  In order to get to the underlying filesystem, I need to
 //  have the mountpoint.  I'll save it away early on in main(), and then
@@ -886,7 +884,7 @@ struct fuse_operations unsharedfs_oper = {
 
 void unsharedfs_usage()
 {
-	fprintf(stderr, "usage:  unsharedfs [FUSE and mount options] sourceDir mountPoint\n");
+	fprintf(stderr, "usage:  unsharedfs -o allow_other [FUSE and mount options] sourceDir mountPoint\n");
 	abort();
 }
 
@@ -910,8 +908,8 @@ int main(int argc, char *argv[])
 	}
 
 	// save original uid/gid:
-	pdata->base_uid = getuid();
-	pdata->base_gid = getgid();
+	pdata->base_uid = geteuid();
+	pdata->base_gid = getegid();
 
 	// Pull the rootdir out of the argument list and save it in my
 	// internal data
@@ -919,6 +917,12 @@ int main(int argc, char *argv[])
 	argv[argc-2] = argv[argc-1];
 	argv[argc-1] = NULL;
 	argc--;
+
+	if ( getuid() != 0 && geteuid() != 0 )
+	{
+		fprintf(stderr,"warning: file system needs root privileges for proper function.\n");
+		fprintf(stderr,"All accesses will be redirected to %s/%d and be executed under the uid of the current user.\n",pdata->rootdir,getuid());
+	}
 
 	// turn over control to fuse
 	fprintf(stderr, "about to call fuse_main\n");
