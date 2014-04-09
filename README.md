@@ -17,7 +17,7 @@ bugs that are exploitable by a malicious user!
 How it works
 ------------
 
-Suppose you have two users with UID 1001 and 1002.  Both users shall be able to
+Suppose you have two users with UID userA and userB.  Both users shall be able to
 access the directory /my-directory, but they shall have two independent views
 on the directory.
 
@@ -25,8 +25,12 @@ First, you have to create the physical locations that both users will be accessi
 
 ```
 mkdir /unshared
-mkdir /unshared/1001
-mkdir /unshared/1002
+theUID=`id -u userA`
+mkdir /unshared/$theUID
+chown userA /unshared/$theUID
+theUID=`id -u userB`
+mkdir /unshared/$theUID
+chown userB /unshared/$theUID
 ```
 
 After this, you can mount the unshared file system:
