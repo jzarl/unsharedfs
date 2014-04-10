@@ -21,6 +21,8 @@
  * gcc -Wall `pkg-config fuse --cflags --libs` -o unshared unshared.c
  */
 
+#define UNSHAREDFS_VERSION_STRING "unsharedfs 1.0-rc1"
+
 // The FUSE API has been changed a number of times.  So, our code
 // needs to define the version of the API that we assume.  As of this
 // writing, the most current API version is 26
@@ -34,6 +36,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse.h>
+#include <fuse_opt.h>
 #include <libgen.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -58,7 +61,7 @@
 #	define LOG(prio, fmt, ...) fprintf(stderr,(fmt),__VA_ARGS__)
 #endif
 
-#define ERRMSG_MAX 5
+#define ERRMSG_MAX 512
 
 // maintain unsharedfs state in here
 struct unsharedfs_state {
@@ -66,6 +69,7 @@ struct unsharedfs_state {
 	gid_t base_gid;
     char *rootdir;
 	char *defaultdir;
+	int allow_other_isset;
 };
 #define PRIVATE_DATA ((struct unsharedfs_state *) fuse_get_context()->private_data)
 
@@ -99,6 +103,7 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 				errno = ENAMETOOLONG;
 				return 0;
 			}
+			LOG(LOG_DEBUG,"diverting to fallback directory %s/%s",PRIVATE_DATA->rootdir,PRIVATE_DATA->defaultdir);
 			return 1;
 		}
 		LOG(LOG_WARNING,"missing directory: %s/%d",PRIVATE_DATA->rootdir,fuse_get_context()->uid);
@@ -849,7 +854,6 @@ void *unsharedfs_init(struct fuse_conn_info *conn)
 			,pdata->base_gid
 			,pdata->rootdir);
 
-
 	return pdata;
 }
 
@@ -982,7 +986,7 @@ int unsharedfs_fgetattr(const char *path, struct stat *statbuf, struct fuse_file
 	return retstat;
 }
 
-struct fuse_operations unsharedfs_oper = {
+static const struct fuse_operations unsharedfs_operations = {
 	.getattr = unsharedfs_getattr,
 	.readlink = unsharedfs_readlink,
 	.mknod = unsharedfs_mknod,
@@ -1020,55 +1024,112 @@ struct fuse_operations unsharedfs_oper = {
 		//TODO: .fallocate
 };
 
-void unsharedfs_usage()
+static void unsharedfs_usage()
 {
-	fprintf(stderr, "usage:  unsharedfs -o allow_other [FUSE and mount options] sourceDir mountPoint\n");
-	abort();
+	printf("usage:  unsharedfs -o allow_other [FUSE and mount options] sourceDir mountPoint\n");
+}
+
+enum unsharedfs_opt_key {
+	KEY_VERSION,
+	KEY_HELP,
+	KEY_FALLBACK,
+	KEY_ALLOW_OTHER
+};
+static const struct fuse_opt unsharedfs_options[] = {
+	// {char * template, int offset, int key}
+	FUSE_OPT_KEY( "--version", KEY_VERSION ),
+	FUSE_OPT_KEY( "-h", KEY_HELP),
+	FUSE_OPT_KEY( "--help", KEY_HELP),
+	FUSE_OPT_KEY( "--fallback=", KEY_FALLBACK),
+	FUSE_OPT_KEY( "allow_other", KEY_ALLOW_OTHER),
+	FUSE_OPT_END
+};
+
+/* for a description of this function, see the fuse_opt_proc_t definition in fuse_opt.h. */
+static int unsharedfs_parse_options(void *data, const char *arg, int key, struct fuse_args *outargs)
+{
+	struct unsharedfs_state *pdata = (struct unsharedfs_state*) data;
+	switch ((enum unsharedfs_opt_key)key)
+	{
+		case KEY_VERSION:
+			printf("%s\n",UNSHAREDFS_VERSION_STRING);
+			exit(0);
+		break;
+		case KEY_HELP:
+			unsharedfs_usage();
+			exit(0);
+		break;
+		case KEY_FALLBACK:
+		{
+			const int prefixlen = 11;
+			size_t len = strlen(arg) - prefixlen;
+			if ( strncmp("--fallback=",arg,prefixlen) != 0 )
+			{
+				fprintf(stderr, "Error in option parsing!");
+				return -1;
+			}
+			pdata->defaultdir = malloc(len+1);
+			if (pdata->defaultdir == NULL)
+			{
+				perror("unsharedfs parse options: malloc failed");
+				return -1;
+			}
+			strncpy(pdata->defaultdir,arg + prefixlen,len);
+			pdata->defaultdir[len] = '\0';
+			return 0;
+		}
+		break;
+		case KEY_ALLOW_OTHER:
+			pdata->allow_other_isset = 1;
+			return 1;
+		break;
+		default:
+			if ( pdata->rootdir == 0 )
+			{
+				pdata->rootdir = realpath(arg, NULL);
+				return 0;
+			}
+		return 1;
+	}
 }
 
 int main(int argc, char *argv[])
 {
 	int fuse_stat;
+	struct fuse_args args = FUSE_ARGS_INIT(argc,argv);
 	struct unsharedfs_state *pdata;
-
-	// Perform some sanity checking on the command line:  make sure
-	// there are enough arguments, and that neither of the last two
-	// start with a hyphen (this will break if you actually have a
-	// rootpoint or mountpoint whose name starts with a hyphen, but so
-	// will a zillion other programs)
-	if ((argc < 3) || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
-		unsharedfs_usage();
 
 	pdata = malloc(sizeof(struct unsharedfs_state));
 	if (pdata == NULL) {
-		perror("main calloc");
-		abort();
+		perror("unsharedfs init");
+		return 1;
 	}
 
 	// save original uid/gid:
 	pdata->base_uid = getuid();
 	pdata->base_gid = getgid();
 
-	// Pull the rootdir out of the argument list and save it in my
-	// internal data
-	pdata->rootdir = realpath(argv[argc-2], NULL);
-	argv[argc-2] = argv[argc-1];
-	argv[argc-1] = NULL;
-	argc--;
-
-	// TODO: allow setting of default dir:
-	pdata->defaultdir = 0;
+	if (fuse_opt_parse(&args, pdata, unsharedfs_options, unsharedfs_parse_options) == -1)
+	{
+		/** error parsing options */
+		return 1;
+	}
 
 	if ( getuid() != 0 && geteuid() != 0 )
 	{
 		fprintf(stderr,"warning: file system needs root privileges for proper function.\n");
 		fprintf(stderr,"All accesses will be redirected to %s/%d and be executed under the uid of the current user.\n",pdata->rootdir,getuid());
 	}
+	if ( ! pdata->allow_other_isset )
+	{
+		fprintf(stderr,"warning: allow_other is not set. Specify \"-o allow_other\" to allow other users to access the mount point.\n");
+		return 1;
+	}
 
 	// turn over control to fuse
-	fprintf(stderr, "about to call fuse_main\n");
-	fuse_stat = fuse_main(argc, argv, &unsharedfs_oper, pdata);
-	fprintf(stderr, "fuse_main returned %d\n", fuse_stat);
+	fuse_stat = fuse_main(args.argc, args.argv, &unsharedfs_operations, pdata);
+	if ( fuse_stat != 0 )
+		fprintf(stderr, "fuse_main returned %d\n", fuse_stat);
 
 	return fuse_stat;
 }
