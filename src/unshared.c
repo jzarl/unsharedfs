@@ -1026,7 +1026,29 @@ static const struct fuse_operations unsharedfs_operations = {
 
 static void unsharedfs_usage()
 {
-	printf("usage:  unsharedfs -o allow_other [FUSE and mount options] sourceDir mountPoint\n");
+	printf("\n"
+			"Usage: unsharedfs -o allow_other [options] basedir mountpoint\n"
+			"\n"
+			"  basedir                   Base directory.\n"
+			"                            All access for a user with a given uid is diverted\n"
+			"                            from mountpoint/path to basedir/uid/path.\n"
+			"\n"
+			"Information:\n"
+			"  -h      --help            Print this and exit.\n"
+			"  -V      --version         Print version number and exit.\n"
+			"\n"
+			"File system behavior:\n"
+			"  --fallback=dir            When the UID directory for a user does not exist,\n"
+			"                            divert access to this path (relative to basedir).\n"
+			"\n"
+			"FUSE options:\n"
+			"  -o opt[,opt,...]          Mount options.\n"
+			"  -o allow_other            Required for regular operation of unsharedfs.\n"
+			"  -r      -o ro             Mount strictly read-only.\n"
+			"  -d      -o debug          Enable debug output (implies -f).\n"
+			"  -f                        Foreground operation.\n"
+			"\n"
+		  );
 }
 
 enum unsharedfs_opt_key {
