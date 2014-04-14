@@ -12,17 +12,12 @@ CFLAGS += -DHAVE_SYSLOG
 .PHONY: all
 all: src/unsharedfs
 
-.PHONY: update-man
-update-man: doc/unsharedfs.8
-
-doc/unsharedfs.8: src/unsharedfs doc/unsharedfs.h2m
-	help2man --output=$@ --section 8 --no-info $(addprefix --include=,$(filter %.h2m,$^)) $<
-
 .PHONY: install
 install:
 	$(INSTALL_PROG) -D src/unsharedfs $(PREFIX)/sbin/unsharedfs
 	mkdir -p $(PREFIX)/share/doc/unsharedfs
 	$(INSTALL_FILE) -t $(PREFIX)/share/doc/unsharedfs README.md COPYING
+	$(INSTALL_FILE) -D doc/unsharedfs.8.gz  $(PREFIX)/share/man/man8/unsharedfs.8.gz
 
 .PHONY: uninstall
 uninstall:
@@ -33,3 +28,13 @@ uninstall:
 clean:
 	rm -f src/unsharedfs
 
+###
+# Rules to update the man-page:
+.PHONY: update-man
+update-man: doc/unsharedfs.8.gz
+
+%.gz: %
+	gzip -f $^
+
+doc/unsharedfs.8: src/unsharedfs doc/unsharedfs.h2m
+	help2man --output=$@ --section 8 --no-info $(addprefix --include=,$(filter %.h2m,$^)) $<
