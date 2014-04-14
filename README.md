@@ -50,7 +50,7 @@ done
 After this, you can mount the unshared file system:
 
 ```
-unshared -o allow_other /unshared /my-directory
+unsharedfs -o allow_other /unshared /my-directory
 ```
 
 Note that the unshared file system needs to be mounted by the root user in
