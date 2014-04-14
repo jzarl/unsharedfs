@@ -17,7 +17,7 @@ bugs that are exploitable by a malicious user!
 How it works
 ------------
 
-Suppose you have two users with UID userA and userB.  Both users shall be able to
+Suppose you have two users *userA* and *userB*. Both users shall be able to
 access the directory /my-directory, but they shall have two independent views
 on the directory.
 

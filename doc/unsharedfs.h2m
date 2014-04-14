@@ -1,0 +1,84 @@
+vim: set spell spelllang=en:
+[DESCRIPTION]
+/Redirect/
+This allows several users to
+access the "same" absolute path without interfering with each other.  Every
+user gets their own individual
+.I view
+on the path.
+[EXAMPLES]
+Suppose you have two users 
+.I userA
+and
+.I userB
+. Both users shall be able to
+access the directory
+.I /my-directory
+, but they shall have two independent views on the directory.
+
+The base directory needs one subdirectory per user (the
+.I UID directory
+that will have access to the file system later on.
+Any other user that accesses the file would normally see an error.
+To prevent this, we define a
+.I fall-back directory
+which will be shown to users who don't have their own UID directory:
+
+.EX
+ /unshared/
+ /unshared/1000
+ /unshared/1001
+ /unshared/default
+.EE
+
+The following shell listing gives an example on how to create the given directory layout.
+The final line invokes the
+.BR unsharedfs
+executable to mount the base directory under
+.I /my-directory
+using
+.I /unshared/default
+as a fall-back directory.
+
+.EX
+.B basedir=/unshared
+.B for user in userA userB
+.B do
+.B 	if theuid=`id -u "$user"`
+.B 	then
+.B 		mkdir "$basedir/$theuid"
+.B 		chown "$user" "$basedir/$theuid"
+.B 	fi
+.B done
+.B mkdir "$basedir/default"
+.B ls -l "$basedir"
+drwxr-xr-x 2 usera root 17 Apr  9 18:12 1000
+drwxr-xr-x 2 userb root 57 Apr 14 14:50 1001
+drwxr-xr-x 2 root root 22 Apr 10 14:40 default
+.B unsharedfs -o allow_other --fallback=default "$basedir" /my-directory
+.EE
+
+
+[NOTES]
+The unshared file system needs to be mounted by the root user in
+order to be effective (even when 
+.B user_allow_other
+has been set in 
+.I /etc/fuse.conf
+).
+
+Otherwise, the FUSE file system does not know the UID of the user that is
+accessing the mount point, and all access will be redirected to the
+UID-directory of the user that mounted the file system.
+
+
+[REPORTING BUGS]
+Please report bugs to
+.UR https://github.com/jzarl/unsharedfs/issues
+the issue tracker on GitHub.
+.UE
+
+
+[SEE ALSO]
+.BR mount.fuse (8),
+.BR fusermount (1)
