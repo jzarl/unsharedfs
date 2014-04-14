@@ -530,17 +530,12 @@ int unsharedfs_open(const char *path, struct fuse_file_info *fi)
  *
  * Changed in version 2.2
  */
-// I don't fully understand the documentation above -- it doesn't
-// match the documentation for the read() system call which says it
-// can return with anything up to the amount of data requested. nor
-// with the fusexmp code which returns the amount of data also
-// returned by read.
 int unsharedfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	int retstat = 0;
 
 	unsharedfs_take_context_id();
-	// 2014-04-07 ZaJ: TODO FIXME: is this correct? what exactly is this one doing???
+	// unsharedfs_open() already put the file handle into fi->fh.
 	// no need to get fpath on this one, since I work from fi->fh not the path
 	retstat = pread(fi->fh, buf, size, offset);
 	unsharedfs_drop_context_id();
@@ -566,7 +561,7 @@ int unsharedfs_write(const char *path, const char *buf, size_t size, off_t offse
 	int retstat = 0;
 
 	unsharedfs_take_context_id();
-	// 2014-04-07 ZaJ: TODO FIXME: is this correct? what exactly is this one doing???
+	// unsharedfs_open() already put the file handle into fi->fh.
 	// no need to get fpath on this one, since I work from fi->fh not the path
 	retstat = pwrite(fi->fh, buf, size, offset);
 	unsharedfs_drop_context_id();
@@ -620,7 +615,6 @@ int unsharedfs_release(const char *path, struct fuse_file_info *fi)
 	int retstat = 0;
 
 	unsharedfs_take_context_id();
-	// 2014-04-07 ZaJ: TODO FIXME: is this correct?
 	// We need to close the file.  Had we allocated any resources
 	// (buffers etc) we'd need to free them here as well.
 	retstat = close(fi->fh);
@@ -777,11 +771,11 @@ int unsharedfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_
 		struct fuse_file_info *fi)
 {
 	unsharedfs_take_context_id();
-	// 2014-04-07 ZaJ: TODO FIXME  what about unshared_fullpath?
 	int retstat = 0;
 	DIR *dp;
 	struct dirent *de;
 
+	// unsharedfs_open() already put the (directory-)file handle into fi->fh.
 	// once again, no need for fullpath -- but note that I need to cast fi->fh
 	dp = (DIR *) (uintptr_t) fi->fh;
 
@@ -866,6 +860,7 @@ void *unsharedfs_init(struct fuse_conn_info *conn)
  */
 void unsharedfs_destroy(void *userdata)
 {
+	// unsharedfs_state *pdata = (unsharedfs_state*) userdata;
 #ifdef HAVE_SYSLOG
 	closelog();
 #endif
