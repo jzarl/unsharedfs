@@ -28,8 +28,8 @@
 // writing, the most current API version is 26
 #define FUSE_USE_VERSION 26
 
-// for seteuid
-#define _XOPEN_SOURCE 600
+// for utimensat
+#define _XOPEN_SOURCE 700
 
 #include <ctype.h>
 #include <dirent.h>
@@ -471,9 +471,15 @@ int unsharedfs_truncate(const char *path, off_t newsize)
 	return retstat;
 }
 
-/** Change the access and/or modification times of a file */
-/* note -- I'll want to change this as soon as 2.6 is in debian testing */
-int unsharedfs_utime(const char *path, struct utimbuf *ubuf)
+/**
+ * Change the access and modification times of a file with nanosecond resolution.
+ *
+ * This supersedes the old utime() interface. New applications should use this.
+ * See the utimensat(2) man page for details.
+ *
+ * Introduced in version 2.6
+ */
+int unsharedfs_utimens(const char *path, const struct timespec tv[2])
 {
 	int retstat = 0;
 	char fpath[PATH_MAX];
@@ -482,7 +488,8 @@ int unsharedfs_utime(const char *path, struct utimbuf *ubuf)
 		return -errno;
 
 	unsharedfs_take_context_id();
-	retstat = utime(fpath, ubuf);
+	// fpath is absolute -> dirfd parameter (AT_FDCWD) is ignored
+	retstat = utimensat(AT_FDCWD, fpath, tv, 0);
 	unsharedfs_drop_context_id();
 	if (retstat < 0)
 		retstat = -errno;
@@ -994,8 +1001,7 @@ static const struct fuse_operations unsharedfs_operations = {
 	.chmod = unsharedfs_chmod,
 	.chown = unsharedfs_chown,
 	.truncate = unsharedfs_truncate,
-	// TODO: implement utimens()
-	.utime = unsharedfs_utime,
+	.utimens = unsharedfs_utimens,
 	.open = unsharedfs_open,
 	.read = unsharedfs_read,
 	.write = unsharedfs_write,
@@ -1015,7 +1021,6 @@ static const struct fuse_operations unsharedfs_operations = {
 	.create = unsharedfs_create,
 	.ftruncate = unsharedfs_ftruncate,
 	.fgetattr = unsharedfs_fgetattr,
-		//TODO: .utimns
 		//TODO: .fallocate
 };
 
