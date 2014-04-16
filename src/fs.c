@@ -58,60 +58,80 @@
 #	define LOG(prio, fmt, ...) fprintf(stderr,(fmt),__VA_ARGS__)
 #endif
 
+// the buffer size used for error messages
 #define ERRMSG_MAX 512
 
-//  All the paths I see are relative to the root of the mounted
-//  filesystem.  In order to get to the underlying filesystem, I need to
-//  have the mountpoint.  I'll save it away early on in main(), and then
-//  whenever I need a path for something I'll call this to construct
-//  it.
-// return 0/false on overflow
+/**
+ * Compute the diverted full path for a relative path.
+ * The path supplied by fuse is always relative to the mountpoint,
+ * and has been sanitized.
+ *
+ * This function basically prepends BASEDIR/UID (or GID) and does some
+ * checks to validate the result. If an error is detected, errno is set accordingly.
+ *
+ * @param fpath the a reference to the return buffer
+ * @param path the relative path to the mountpoint
+ * @return 1 on success, 0 on error.
+ */
 static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 {
 	struct stat sb;
 	size_t pathlen;
+	struct unsharedfs_state *pdata = PRIVATE_DATA;
+	// size_t is big enough for either uid_t or gid_t:
+	size_t ugid;
+
+	if ( pdata->fsmode == UID_ONLY )
+		ugid = fuse_get_context()->uid;
+	else
+		ugid = fuse_get_context()->gid;
+
 	// assemble "base" directory:
-	pathlen = snprintf(fpath,PATH_MAX,"%s/%d",PRIVATE_DATA->rootdir,fuse_get_context()->uid);
+	pathlen = snprintf(fpath,PATH_MAX,"%s/%ld",pdata->rootdir,ugid);
 	if ( pathlen >= PATH_MAX )
 	{
 		LOG(LOG_ERR,"Long path truncated: %s",path);
 		errno = ENAMETOOLONG;
 		return 0;
 	}
+
 	// does base directory exist?
 	if ( stat(fpath,&sb) != 0 )
 	{
 		// is a fallback directory defined?
-		if (PRIVATE_DATA->defaultdir)
+		if (pdata->defaultdir)
 		{ // no uid check in this case
-			if (PATH_MAX <= snprintf(fpath,PATH_MAX,"%s/%s%s",PRIVATE_DATA->rootdir,PRIVATE_DATA->defaultdir,path) )
+			if (PATH_MAX <= snprintf(fpath,PATH_MAX,"%s/%s%s",pdata->rootdir,pdata->defaultdir,path) )
 			{
 				LOG(LOG_ERR,"Long path truncated: %s",path);
 				errno = ENAMETOOLONG;
 				return 0;
 			}
-			LOG(LOG_DEBUG,"diverting to fallback directory %s/%s",PRIVATE_DATA->rootdir,PRIVATE_DATA->defaultdir);
+			LOG(LOG_DEBUG,"diverting to fallback directory %s/%s",pdata->rootdir,pdata->defaultdir);
 			return 1;
 		}
-		LOG(LOG_WARNING,"missing directory: %s/%d",PRIVATE_DATA->rootdir,fuse_get_context()->uid);
+		LOG(LOG_WARNING,"missing directory: %s/%ld",pdata->rootdir,ugid);
 		errno = EBUSY;
 		return 0;
 	}
+	
 	// base directory is a directory?
 	if ( ! (S_IFDIR & sb.st_mode) )
 	{
-		LOG(LOG_ERR,"not a directory: %s/%d",PRIVATE_DATA->rootdir,fuse_get_context()->uid);
+		LOG(LOG_ERR,"not a directory: %s/%ld",pdata->rootdir,ugid);
 		errno = ENOTDIR;
 		return 0;
 	}
+	
 	// uid matches owner?
-	if ( fuse_get_context()->uid != sb.st_uid )
+	if ( pdata->check_ownership && ugid != sb.st_uid )
 	{
 		// pin name to uid:
-		LOG(LOG_ERR,"directory name does not match owner: %s/%d (owner: %d)",PRIVATE_DATA->rootdir,fuse_get_context()->uid,sb.st_uid);
+		LOG(LOG_ERR,"directory name does not match owner: %s/%ld (owner: %d)",pdata->rootdir,ugid,sb.st_uid);
 		errno = EACCES;
 		return 0;
 	}
+	
 	// add "path" component:
 	if (strlen(path) + pathlen + 1 >= PATH_MAX)
 	{
@@ -183,11 +203,6 @@ static void unsharedfs_drop_context_id()
 	LOG(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
 }
 
-///////////////////////////////////////////////////////////
-//
-// Prototypes for all these functions, and the C-style comments,
-// come indirectly from /usr/include/fuse.h
-//
 /** Get file attributes.
  *
  * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
@@ -742,9 +757,6 @@ int unsharedfs_opendir(const char *path, struct fuse_file_info *fi)
 
 /** Read directory
  *
- * This supersedes the old getdir() interface.  New applications
- * should use this.
- *
  * The filesystem may choose between two modes of operation:
  *
  * 1) The readdir implementation ignores the offset parameter, and
@@ -854,7 +866,12 @@ void *unsharedfs_init(struct fuse_conn_info *conn)
  */
 void unsharedfs_destroy(void *userdata)
 {
-	// unsharedfs_state *pdata = (unsharedfs_state*) userdata;
+	struct unsharedfs_state *pdata = (struct unsharedfs_state*) userdata;
+	// not strictly necessary, since the memory is freed on exit, anyways:
+	free(pdata->rootdir);
+	free(pdata->defaultdir);
+	free(pdata);
+
 #ifdef HAVE_SYSLOG
 	closelog();
 #endif

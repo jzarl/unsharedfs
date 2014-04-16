@@ -80,6 +80,10 @@ static void unsharedfs_usage()
 			"File system behavior:\n"
 			"      --fallback=dir        When the UID directory for a user does not exist,\n"
 			"                            divert access to this path (relative to basedir).\n"
+			"      --no-check-ownership  Allow access to the uid directory even if the owner\n"
+			"                            does not match the directory name.\n"
+			"      --use-gid             Use group id (gid) instead of the user id to determine\n"
+			"                            the diverted path. Currently this implies \"--no-check-ownership\"\n"
 			"\n"
 			"FUSE options:\n"
 			"  -o opt[,opt,...]          Mount options.\n"
@@ -95,7 +99,9 @@ enum unsharedfs_opt_key {
 	KEY_VERSION,
 	KEY_HELP,
 	KEY_FALLBACK,
-	KEY_ALLOW_OTHER
+	KEY_ALLOW_OTHER,
+	KEY_NO_CHECK_OWNERSHIP,
+	KEY_USE_GID
 };
 static const struct fuse_opt unsharedfs_options[] = {
 	// {char * template, int offset, int key}
@@ -103,6 +109,8 @@ static const struct fuse_opt unsharedfs_options[] = {
 	FUSE_OPT_KEY( "-h", KEY_HELP),
 	FUSE_OPT_KEY( "--help", KEY_HELP),
 	FUSE_OPT_KEY( "--fallback=", KEY_FALLBACK),
+	FUSE_OPT_KEY( "--no-check-ownership", KEY_NO_CHECK_OWNERSHIP),
+	FUSE_OPT_KEY( "--use-gid", KEY_USE_GID),
 	FUSE_OPT_KEY( "allow_other", KEY_ALLOW_OTHER),
 	FUSE_OPT_END
 };
@@ -111,6 +119,9 @@ static const struct fuse_opt unsharedfs_options[] = {
 static int unsharedfs_parse_options(void *data, const char *arg, int key, struct fuse_args *outargs)
 {
 	struct unsharedfs_state *pdata = (struct unsharedfs_state*) data;
+	// return 0 to consume the argument
+	// return 1 to pass the argument to fuse
+	// return -1 to abort
 	switch ((enum unsharedfs_opt_key)key)
 	{
 		case KEY_VERSION:
@@ -148,6 +159,15 @@ static int unsharedfs_parse_options(void *data, const char *arg, int key, struct
 			return 0;
 		}
 		break;
+		case KEY_NO_CHECK_OWNERSHIP:
+			pdata->check_ownership = 0;
+			return 0;
+		break;
+		case KEY_USE_GID:
+			pdata->fsmode = GID_ONLY;
+			pdata->check_ownership = 0;
+			return 0;
+		break;
 		case KEY_ALLOW_OTHER:
 			pdata->allow_other_isset = 1;
 			return 1;
@@ -177,6 +197,8 @@ int main(int argc, char *argv[])
 	// save original uid/gid:
 	pdata->base_uid = getuid();
 	pdata->base_gid = getgid();
+	pdata->check_ownership = 0;
+	pdata->fsmode = UID_ONLY;
 
 	if (fuse_opt_parse(&args, pdata, unsharedfs_options, unsharedfs_parse_options) == -1)
 	{

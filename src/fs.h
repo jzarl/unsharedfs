@@ -27,6 +27,12 @@
 #include <sys/types.h>
 #include <fuse.h>
 
+enum unsharedfs_fsmode {
+	UID_ONLY,
+	GID_ONLY
+};
+		   
+
 // maintain unsharedfs state in here
 struct unsharedfs_state {
 	uid_t base_uid;
@@ -34,6 +40,8 @@ struct unsharedfs_state {
     char *rootdir;
 	char *defaultdir;
 	int allow_other_isset;
+	int fsmode;
+	int check_ownership;
 };
 
 int unsharedfs_access(const char *path, int mask);
