@@ -12,6 +12,8 @@ CFLAGS += -DHAVE_SYSLOG
 .PHONY: all
 all: src/unsharedfs
 
+src/unsharedfs: src/unsharedfs.o src/fs.o
+
 .PHONY: install
 install:
 	$(INSTALL_PROG) -D src/unsharedfs $(PREFIX)/sbin/unsharedfs
@@ -26,7 +28,7 @@ uninstall:
 
 .PHONY: clean
 clean:
-	rm -f src/unsharedfs
+	rm -f src/unsharedfs src/*.o
 
 ###
 # Rules to update the man-page:
