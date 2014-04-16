@@ -66,7 +66,7 @@ Installation
 1. make
 2. make install PREFIX=/some/prefix
 
-If you want to update the manpage, you need the help2man utiltiy.
+If you want to update the manpage, you need the [help2man](http://www.gnu.org/software/help2man/) utiltiy.
 The manpage is created (semi-)automatically from the usage information of the
 unsharedfs binary and additional text in the file doc/unsharedfs.h2m.
 If you make any changes in either one, update the manpage by running:
