@@ -1,0 +1,152 @@
+#!/bin/sh
+###
+# unsharedfs_prepare
+# Copyright (c) 2014 Johannes Zarl
+###
+
+ALL_USERS_UID=
+CREATE_DEFAULT=
+ROOTDIR=
+USE_GID=
+USERLIST=
+
+print_usage()
+{
+	cat <<EOF
+
+Usage: $0 ROOTDIRECTORY [-d] [-g|--use-gid] USER [ ... USER]
+       $0 ROOTDIRECTORY [-d] [-g|--use-gid] -a [uid_min]
+
+Create a directory structure suitable for mounting as an unsharedfs file system.
+
+   ROOTDIRECTORY        Empty directory in which the subdirectories will be created.
+   USER                 Username to include.
+
+   -a [uid_min]         Create directories for all users (with an uid >= uid_min).
+   -d                   Also create a directory "default".
+   -g, --use-gid        Create a directory structure usable with the unsharedfs option "--use-gid".
+
+EOF
+}
+
+## check_rootdir ROOTDIR
+# return 0 if the rootdir seems fine, 1 otherwise.
+check_rootdir()
+{
+	if [ ! -d "$1" ]
+	then
+		echo "Root directory does not exist!" >&2
+		return 1
+	fi
+	if [ `ls -1 "$1" |wc -l` != "0" ]
+	then
+	   echo "Root directory is not empty!" >&2
+	   return 1
+	fi
+}
+
+## get_id USERNAME
+# Print the numeric [gu]id for USERNAME
+# return 0 on success, 1 if the user name is not found.
+get_id()
+{
+	if [ -z "$USE_GID" ]
+	then
+		id -u "$1"
+	else
+		id -g "$1"
+	fi
+}
+
+## set_ownership DIRECTORY USER
+# Set the (group or user) ownership on DIRECTORY to USER.
+set_ownership()
+{
+	if [ -z "$USE_GID" ]
+	then
+		chown "$2" "$1"
+	else
+		if grpid=`id -gn "$2"`
+		then
+			chgrp "$grpid" "$1"
+		else
+			echo "Could not get group name for user $2!" >&2
+			return 1
+		fi
+	fi
+}
+
+## create_dirs ROOTDIR
+# Read user names from stdin (one per line) and create a [gu]id directory for each name.
+create_dirs()
+{
+	while read user
+	do
+		if theid=`get_id "$user"`
+		then
+			# quietly skip existing directories
+			if [ ! -x "$1/$theid" ]
+			then
+				mkdir "$1/$theid"
+				set_ownership "$1/$theid" "$user"
+			fi
+		else
+			echo "Warning: could not find numeric id for user $user!" >&2
+		fi
+	done
+}
+
+
+### Parse commandline:
+
+select_uid_min=false
+for arg
+do
+	if $select_uid_min
+	then
+		ALL_USERS_UID="$arg"
+		select_uid_min=false
+		break
+	fi
+	case "$arg" in
+	-a)
+		echo "Not yet implemented!"
+		exit 1
+		;;
+	-d)
+		CREATE_DEFAULT=1
+		;;
+	-g|--use-gid)
+		USE_GID=yes
+		;;
+	-h|--help)
+		print_usage
+		exit 0
+		;;
+	*)
+		if [ -z "$ROOTDIR" ]
+		then
+			ROOTDIR="$arg"
+		else
+			USERLIST="$USERLIST $arg"
+		fi
+		;;
+	esac
+done
+
+if $select_uid_min
+then
+	ALL_USERS_UID=0
+fi
+
+if [ \( -z "$ROOTDIR" \) -o \( -z "$ALL_USERS_UID" -a -z "$USERLIST" \) ]
+then
+	print_usage
+	exit 1
+fi
+
+check_rootdir "$ROOTDIR" || exit 2
+for u in $USERLIST
+do
+	echo $u
+done | create_dirs "$ROOTDIR"
