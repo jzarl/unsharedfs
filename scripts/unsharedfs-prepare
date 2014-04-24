@@ -1,34 +1,56 @@
 #!/bin/sh
 ###
-# unsharedfs_prepare
+# unsharedfs-prepare
 # Copyright (c) 2014 Johannes Zarl
 ###
+UNSHAREDFS_PREPARE_VERSIONSTRING="unsharedfs-prepare 1.0"
 
 ACT=
 ALL_USERS=
 CREATE_DEFAULT=
+FORCE_NON_EMPTY_ROOTDIR=
 ROOTDIR=
-UID_MIN=
-UID_MAX=
+UID_MIN=0
+UID_MAX=0
 USE_GID=
+USE_UID_MIN=
+USE_UID_MAX=
 USERLIST=
 
+print_version()
+{
+	cat <<EOF
+$UNSHAREDFS_PREPARE_VERSIONSTRING
+
+Copyright (C) 2014 Johannes Zarl
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Written by Johannes Zarl.
+
+EOF
+}
 print_usage()
 {
 	cat <<EOF
-
-Usage: $0 ROOTDIRECTORY [-d] [-n|--no-act] [-g|--use-gid] USER [ ... USER]
-       $0 ROOTDIRECTORY [-d] [-n|--no-act] [-g|--use-gid] -a [uid_min [uid_max]]
+Usage: $0 ROOTDIRECTORY [OPTIONS] USER [ ... USER]
+       $0 ROOTDIRECTORY [OPTIONS] -a [uid_min [uid_max]]
 
 Create a directory structure suitable for mounting as an unsharedfs file system.
 
-   ROOTDIRECTORY        Empty directory in which the subdirectories will be created.
-   USER                 Username to include.
+   ROOTDIRECTORY    Empty directory in which the subdirectories will be created.
+   USER             Username to include.
 
-   -a [uid_min]         Create directories for all users (with an uid >= uid_min).
-   -d                   Also create a directory "default".
-   -g, --use-gid        Create a directory structure usable with the unsharedfs option "--use-gid".
-   -n, --no-act         Don't actually create any directory.
+Options:
+   -a [uid_min [uid_max]]
+                    Create directories for all users (as seen by ``getent passwd'')
+                    If bounds are given, only users with an uid greater or equal to uid_min
+                    and less or equal to uid_max are considered.
+   -d               Also create a directory "default".
+   -f, --force-non-empty-rootdir
+                    Allow a non-empty root directory.
+   -g, --use-gid    Create a directory structure usable with the unsharedfs option "--use-gid".
+   -n, --no-act     Don't actually create any directory, just print what would be done.
 
 EOF
 }
@@ -42,7 +64,7 @@ check_rootdir()
 		echo "Root directory does not exist!" >&2
 		return 1
 	fi
-	if [ `ls -1 "$1" |wc -l` != "0" ]
+	if [ -z "$FORCE_NON_EMPTY_ROOTDIR" -a `ls -1 "$1" |wc -l` != "0" ]
 	then
 	   echo "Root directory is not empty!" >&2
 	   return 1
@@ -107,11 +129,13 @@ for arg
 do
 	case "$arg" in
 	-a)
-		echo "Not yet implemented!"
-		exit 1
+		ALL_USERS=1
 		;;
 	-d)
 		CREATE_DEFAULT=1
+		;;
+	-f|--force-non-empty-rootdir)
+		FORCE_NON_EMPTY_ROOTDIR=1
 		;;
 	-g|--use-gid)
 		USE_GID=yes
@@ -146,12 +170,14 @@ if [ -n "$ALL_USERS" ]
 then
 	for arg in $USERLIST
 	do
-		if [ -z "$UID_MIN" ]
+		if [ -z "$USE_UID_MIN" ]
 		then
+			USE_UID_MIN=1
 			UID_MIN="$arg"
 		else
-			if [ -z "$UID_MAX" ]
+			if [ -z "$USE_UID_MAX" ]
 			then
+				USE_UID_MAX=1
 				UID_MAX="$arg"
 			else
 				echo "Too many arguments to ``-a'' parameter!" >&2
@@ -162,14 +188,28 @@ then
 	done
 fi
 
-if [ \( -z "$ROOTDIR" \) -o \( -z "$ALL_USERS_UID" -a -z "$USERLIST" \) ]
+if [ \( -z "$ROOTDIR" \) -o \( -z "$ALL_USERS" -a -z "$USERLIST" \) ]
 then
 	print_usage
 	exit 1
 fi
 
 check_rootdir "$ROOTDIR" || exit 2
-for u in $USERLIST
-do
-	echo $u
-done | create_dirs "$ROOTDIR"
+
+if [ -z "$ALL_USERS" ]
+then
+	# create dirs for specified users:
+	for u in $USERLIST
+	do
+		echo $u
+	done | create_dirs "$ROOTDIR"
+else
+	# create dirs for all users:
+	getent passwd | while IFS=: read name x uid rest
+	do
+		if [ -z "$USE_UID_MIN" -o \( "$uid" -ge "$UID_MIN" -a \( -z "$USE_UID_MAX" -o "$uid" -le "$UID_MAX" \) \) ]
+		then
+			echo $name
+		fi
+	done | create_dirs "$ROOTDIR"
+fi
