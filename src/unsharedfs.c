@@ -16,7 +16,7 @@
  * A copy of that code is included in the file fuse.h
  */
 
-#define UNSHAREDFS_VERSION_STRING "unsharedfs 1.0-rc2"
+#define UNSHAREDFS_VERSION_STRING "unsharedfs 1.0"
 
 #include "fs.h"
 
