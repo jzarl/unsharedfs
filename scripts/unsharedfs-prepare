@@ -147,6 +147,10 @@ do
 	-n|--no-act)
 		ACT="echo NOT executing: "
 		;;
+	--version)
+		print_version
+		exit 0
+		;;
 	-*)
 		echo "Invalid argument: $arg" >&2
 		print_usage
