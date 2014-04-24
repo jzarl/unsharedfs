@@ -4,9 +4,12 @@
 # Copyright (c) 2014 Johannes Zarl
 ###
 
-ALL_USERS_UID=
+ACT=
+ALL_USERS=
 CREATE_DEFAULT=
 ROOTDIR=
+UID_MIN=
+UID_MAX=
 USE_GID=
 USERLIST=
 
@@ -14,8 +17,8 @@ print_usage()
 {
 	cat <<EOF
 
-Usage: $0 ROOTDIRECTORY [-d] [-g|--use-gid] USER [ ... USER]
-       $0 ROOTDIRECTORY [-d] [-g|--use-gid] -a [uid_min]
+Usage: $0 ROOTDIRECTORY [-d] [-n|--no-act] [-g|--use-gid] USER [ ... USER]
+       $0 ROOTDIRECTORY [-d] [-n|--no-act] [-g|--use-gid] -a [uid_min [uid_max]]
 
 Create a directory structure suitable for mounting as an unsharedfs file system.
 
@@ -25,6 +28,7 @@ Create a directory structure suitable for mounting as an unsharedfs file system.
    -a [uid_min]         Create directories for all users (with an uid >= uid_min).
    -d                   Also create a directory "default".
    -g, --use-gid        Create a directory structure usable with the unsharedfs option "--use-gid".
+   -n, --no-act         Don't actually create any directory.
 
 EOF
 }
@@ -64,11 +68,11 @@ set_ownership()
 {
 	if [ -z "$USE_GID" ]
 	then
-		chown "$2" "$1"
+		$ACT chown "$2" "$1"
 	else
 		if grpid=`id -gn "$2"`
 		then
-			chgrp "$grpid" "$1"
+			$ACT chgrp "$grpid" "$1"
 		else
 			echo "Could not get group name for user $2!" >&2
 			return 1
@@ -87,7 +91,7 @@ create_dirs()
 			# quietly skip existing directories
 			if [ ! -x "$1/$theid" ]
 			then
-				mkdir "$1/$theid"
+				$ACT mkdir "$1/$theid"
 				set_ownership "$1/$theid" "$user"
 			fi
 		else
@@ -99,15 +103,8 @@ create_dirs()
 
 ### Parse commandline:
 
-select_uid_min=false
 for arg
 do
-	if $select_uid_min
-	then
-		ALL_USERS_UID="$arg"
-		select_uid_min=false
-		break
-	fi
 	case "$arg" in
 	-a)
 		echo "Not yet implemented!"
@@ -123,20 +120,46 @@ do
 		print_usage
 		exit 0
 		;;
+	-n|--no-act)
+		ACT="echo NOT executing: "
+		;;
+	-*)
+		echo "Invalid argument: $arg" >&2
+		print_usage
+		exit 1
+		;;
 	*)
+		# first non-option argument is root dir:
 		if [ -z "$ROOTDIR" ]
 		then
 			ROOTDIR="$arg"
 		else
+			# gather other non-option arguments in USERLIST
+			# if "-a" was set, we will parse this later on...
 			USERLIST="$USERLIST $arg"
 		fi
 		;;
 	esac
 done
 
-if $select_uid_min
+if [ -n "$ALL_USERS" ]
 then
-	ALL_USERS_UID=0
+	for arg in $USERLIST
+	do
+		if [ -z "$UID_MIN" ]
+		then
+			UID_MIN="$arg"
+		else
+			if [ -z "$UID_MAX" ]
+			then
+				UID_MAX="$arg"
+			else
+				echo "Too many arguments to ``-a'' parameter!" >&2
+				print_usage
+				exit 1
+			fi
+		fi
+	done
 fi
 
 if [ \( -z "$ROOTDIR" \) -o \( -z "$ALL_USERS_UID" -a -z "$USERLIST" \) ]
