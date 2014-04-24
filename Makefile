@@ -1,6 +1,7 @@
 PREFIX = /usr/local
 INSTALL = install
 INSTALL_PROG = $(INSTALL) -p -s -m 0755
+INSTALL_SCRIPT = $(INSTALL) -p -m 0755
 INSTALL_FILE = $(INSTALL) -p -m 0644
 
 # compiler flags:
@@ -17,7 +18,7 @@ src/unsharedfs: src/unsharedfs.o src/fs.o
 .PHONY: install
 install:
 	$(INSTALL_PROG) -D src/unsharedfs $(PREFIX)/sbin/unsharedfs
-	$(INSTALL_PROG) -D scripts/unsharedfs-prepare $(PREFIX)/sbin/unsharedfs-prepare
+	$(INSTALL_SCRIPT) -D scripts/unsharedfs-prepare $(PREFIX)/sbin/unsharedfs-prepare
 	mkdir -p $(PREFIX)/share/doc/unsharedfs
 	$(INSTALL_FILE) -t $(PREFIX)/share/doc/unsharedfs README.md COPYING
 	$(INSTALL_FILE) -D doc/unsharedfs.8.gz  $(PREFIX)/share/man/man8/unsharedfs.8.gz
