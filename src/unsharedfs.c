@@ -101,7 +101,8 @@ enum unsharedfs_opt_key {
 	KEY_FALLBACK,
 	KEY_ALLOW_OTHER,
 	KEY_NO_CHECK_OWNERSHIP,
-	KEY_USE_GID
+	KEY_USE_GID,
+	KEY_FUSE_PASSTHROUGH,
 };
 static const struct fuse_opt unsharedfs_options[] = {
 	// {char * template, int offset, int key}
@@ -112,6 +113,8 @@ static const struct fuse_opt unsharedfs_options[] = {
 	FUSE_OPT_KEY( "--no-check-ownership", KEY_NO_CHECK_OWNERSHIP),
 	FUSE_OPT_KEY( "--use-gid", KEY_USE_GID),
 	FUSE_OPT_KEY( "allow_other", KEY_ALLOW_OTHER),
+	FUSE_OPT_KEY( "debug", KEY_FUSE_PASSTHROUGH),
+	FUSE_OPT_KEY( "ro", KEY_FUSE_PASSTHROUGH),
 	FUSE_OPT_END
 };
 
@@ -172,8 +175,12 @@ static int unsharedfs_parse_options(void *data, const char *arg, int key, struct
 			pdata->allow_other_isset = 1;
 			return 1;
 		break;
+		// just forward fuse-specific options
+		case KEY_FUSE_PASSTHROUGH:
+			return 1;
+		break;
 		default:
-			if ( pdata->rootdir == 0 )
+			if ( arg[0] != '-' && pdata->rootdir == 0 )
 			{
 				pdata->rootdir = realpath(arg, NULL);
 				return 0;
