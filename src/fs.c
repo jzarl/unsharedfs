@@ -41,22 +41,34 @@
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <sys/stat.h>
+#include <stdarg.h>
 #ifdef HAVE_SYSLOG
 #include <syslog.h>
 #endif
 
 #define PRIVATE_DATA ((struct unsharedfs_state *) fuse_get_context()->private_data)
 
-#ifdef HAVE_SYSLOG
-#	define LOG(prio, fmt, ...) syslog((prio),(fmt),__VA_ARGS__)
-#else
-#	define LOG_DEBUG
-#	define LOG_INFO
-#	define LOG_NOTICE
-#	define LOG_WARNING
-#	define LOG_ERR
-#	define LOG(prio, fmt, ...) fprintf(stderr,(fmt),__VA_ARGS__)
+#ifndef HAVE_SYSLOG
+#	define LOG_DEBUG 0
+#	define LOG_INFO 1
+#	define LOG_NOTICE 2
+#	define LOG_WARNING 3
+#	define LOG_ERR 4
 #endif
+
+void logmsg(int prio, const char *fmt, ...)
+{
+	va_list args;
+	va_start( args, fmt);
+
+#ifdef HAVE_SYSLOG
+	syslog(prio,fmt,args);
+#endif
+	// when in foreground-mode, this gets printed:
+	vfprintf(stderr,fmt,args);
+	va_end(args);
+	fprintf(stderr,"\n");
+}
 
 // the buffer size used for error messages
 #define ERRMSG_MAX 512
@@ -90,7 +102,7 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 	pathlen = snprintf(fpath,PATH_MAX,"%s/%ld",pdata->rootdir,ugid);
 	if ( pathlen >= PATH_MAX )
 	{
-		LOG(LOG_ERR,"Long path truncated: %s",path);
+		logmsg(LOG_ERR,"Long path truncated: %s",path);
 		errno = ENAMETOOLONG;
 		return 0;
 	}
@@ -103,14 +115,14 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 		{ // no uid check in this case
 			if (PATH_MAX <= snprintf(fpath,PATH_MAX,"%s/%s%s",pdata->rootdir,pdata->defaultdir,path) )
 			{
-				LOG(LOG_ERR,"Long path truncated: %s",path);
+				logmsg(LOG_ERR,"Long path truncated: %s",path);
 				errno = ENAMETOOLONG;
 				return 0;
 			}
-			LOG(LOG_DEBUG,"diverting to fallback directory %s/%s",pdata->rootdir,pdata->defaultdir);
+			logmsg(LOG_DEBUG,"diverting to fallback directory %s/%s",pdata->rootdir,pdata->defaultdir);
 			return 1;
 		}
-		LOG(LOG_WARNING,"missing directory: %s/%ld",pdata->rootdir,ugid);
+		logmsg(LOG_WARNING,"missing directory: %s/%ld",pdata->rootdir,ugid);
 		errno = EBUSY;
 		return 0;
 	}
@@ -118,7 +130,7 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 	// base directory is a directory?
 	if ( ! (S_IFDIR & sb.st_mode) )
 	{
-		LOG(LOG_ERR,"not a directory: %s/%ld",pdata->rootdir,ugid);
+		logmsg(LOG_ERR,"not a directory: %s/%ld",pdata->rootdir,ugid);
 		errno = ENOTDIR;
 		return 0;
 	}
@@ -127,7 +139,7 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 	if ( pdata->check_ownership && ugid != sb.st_uid )
 	{
 		// pin name to uid:
-		LOG(LOG_ERR,"directory name does not match owner: %s/%ld (owner: %d)",pdata->rootdir,ugid,sb.st_uid);
+		logmsg(LOG_ERR,"directory name does not match owner: %s/%ld (owner: %d)",pdata->rootdir,ugid,sb.st_uid);
 		errno = EACCES;
 		return 0;
 	}
@@ -135,7 +147,7 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
 	// add "path" component:
 	if (strlen(path) + pathlen + 1 >= PATH_MAX)
 	{
-		LOG(LOG_ERR,"path too long: %s%s",fpath,path);
+		logmsg(LOG_ERR,"path too long: %s%s",fpath,path);
 		errno = ENAMETOOLONG;
 		return 0;
 	}
@@ -154,7 +166,7 @@ static void unsharedfs_take_context_id()
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"unsharedfs_take_context_id: failed to set egid from %d to %d: %s"
+		logmsg(LOG_WARNING,"unsharedfs_take_context_id: failed to set egid from %d to %d: %s"
 				,getegid()
 				,fuse_get_context()->gid
 				,errmsg
@@ -165,13 +177,13 @@ static void unsharedfs_take_context_id()
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"unsharedfs_take_context_id: failed to set euid from %d to %d: %s"
+		logmsg(LOG_WARNING,"unsharedfs_take_context_id: failed to set euid from %d to %d: %s"
 				,geteuid()
 				,fuse_get_context()->uid
 				,errmsg
 		   );
 	}
-	LOG(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
+	logmsg(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
 }
 /**
  * Drop the uid/gid of the current context.
@@ -183,7 +195,7 @@ static void unsharedfs_drop_context_id()
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"unsharedfs_drop_context_id: failed to set euid from %d to %d: %s"
+		logmsg(LOG_WARNING,"unsharedfs_drop_context_id: failed to set euid from %d to %d: %s"
 				,geteuid()
 				,fuse_get_context()->uid
 				,errmsg
@@ -194,13 +206,13 @@ static void unsharedfs_drop_context_id()
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		LOG(LOG_WARNING,"unsharedfs_drop_context_id: failed to set egid from %d to %d: %s"
+		logmsg(LOG_WARNING,"unsharedfs_drop_context_id: failed to set egid from %d to %d: %s"
 				,getegid()
 				,fuse_get_context()->gid
 				,errmsg
 		   );
 	}
-	LOG(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
+	logmsg(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
 }
 
 /** Get file attributes.
@@ -849,7 +861,7 @@ void *unsharedfs_init(struct fuse_conn_info *conn)
 #ifdef HAVE_SYSLOG
 	openlog("unsharedfs",LOG_PID,LOG_USER);
 #endif
-	LOG(LOG_INFO,"initialising unsharedfs with base uid/gid %d/%d at %s"
+	logmsg(LOG_INFO,"initialising unsharedfs with base uid/gid %d/%d at %s"
 			,pdata->base_uid
 			,pdata->base_gid
 			,pdata->rootdir);
