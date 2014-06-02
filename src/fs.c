@@ -419,7 +419,7 @@ int unsharedfs_link(const char *path, const char *newpath)
 
 	if (!unsharedfs_fullpath(fpath, path))
 		return -errno;
-	if (!unsharedfs_fullpath(fpath, path))
+	if (!unsharedfs_fullpath(fnewpath, newpath))
 		return -errno;
 
 	unsharedfs_take_context_id();
