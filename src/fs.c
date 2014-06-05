@@ -569,7 +569,7 @@ int unsharedfs_read(const char *path, char *buf, size_t size, off_t offset, stru
 
 	unsharedfs_take_context_id();
 	// unsharedfs_open() already put the file handle into fi->fh.
-	// no need to get fpath on this one, since I work from fi->fh not the path
+	// with flag_nopath, path is not even set!
 	retstat = pread(fi->fh, buf, size, offset);
 	unsharedfs_drop_context_id();
 	if (retstat < 0)
@@ -595,7 +595,7 @@ int unsharedfs_write(const char *path, const char *buf, size_t size, off_t offse
 
 	unsharedfs_take_context_id();
 	// unsharedfs_open() already put the file handle into fi->fh.
-	// no need to get fpath on this one, since I work from fi->fh not the path
+	// with flag_nopath, path is not even set!
 	retstat = pwrite(fi->fh, buf, size, offset);
 	unsharedfs_drop_context_id();
 	if (retstat < 0)
@@ -650,6 +650,8 @@ int unsharedfs_release(const char *path, struct fuse_file_info *fi)
 	unsharedfs_take_context_id();
 	// We need to close the file.  Had we allocated any resources
 	// (buffers etc) we'd need to free them here as well.
+	// unsharedfs_open() already put the file handle into fi->fh.
+	// with flag_nopath, path is not even set!
 	retstat = close(fi->fh);
 	unsharedfs_drop_context_id();
 
@@ -667,6 +669,8 @@ int unsharedfs_fsync(const char *path, int datasync, struct fuse_file_info *fi)
 {
 	int retstat = 0;
 
+	// unsharedfs_open() already put the file handle into fi->fh.
+	// with flag_nopath, path is not even set!
 	unsharedfs_take_context_id();
 	if (datasync)
 		retstat = fdatasync(fi->fh);
@@ -807,6 +811,7 @@ int unsharedfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_
 
 	// unsharedfs_open() already put the (directory-)file handle into fi->fh.
 	// once again, no need for fullpath -- but note that I need to cast fi->fh
+	// with flag_nopath, path is not even set!
 	dp = (DIR *) (uintptr_t) fi->fh;
 
 	// Every directory contains at least two entries: . and ..  If my
@@ -843,6 +848,8 @@ int unsharedfs_releasedir(const char *path, struct fuse_file_info *fi)
 {
 	int retstat = 0;
 
+	// unsharedfs_open() already put the file handle into fi->fh.
+	// with flag_nopath, path is not even set!
 	unsharedfs_take_context_id();
 	closedir((DIR *) (uintptr_t) fi->fh);
 	unsharedfs_drop_context_id();
@@ -978,6 +985,8 @@ int unsharedfs_ftruncate(const char *path, off_t offset, struct fuse_file_info *
 {
 	int retstat = 0;
 
+	// unsharedfs_open() already put the file handle into fi->fh.
+	// with flag_nopath, path is not even set!
 	unsharedfs_take_context_id();
 	retstat = ftruncate(fi->fh, offset);
 	unsharedfs_drop_context_id();
@@ -999,13 +1008,12 @@ int unsharedfs_ftruncate(const char *path, off_t offset, struct fuse_file_info *
  *
  * Introduced in version 2.5
  */
-// Since it's currently only called after unsharedfs_create(), and unsharedfs_create()
-// opens the file, I ought to be able to just use the fd and ignore
-// the path...
 int unsharedfs_fgetattr(const char *path, struct stat *statbuf, struct fuse_file_info *fi)
 {
 	int retstat = 0;
 
+	// unsharedfs_open() already put the file handle into fi->fh.
+	// with flag_nopath, path is not even set!
 	unsharedfs_take_context_id();
 	retstat = fstat(fi->fh, statbuf);
 	unsharedfs_drop_context_id();
