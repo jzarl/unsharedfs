@@ -161,6 +161,10 @@ static int unsharedfs_fullpath(char fpath[PATH_MAX], const char *path)
  */
 static void unsharedfs_take_context_id()
 {
+	// some internal fuse calls have an empty context:
+	if ( fuse_get_context()->pid == 0 )
+		return;
+
 	// Set gid first, because we won't be able after setting the uid.
 	if ( setegid(fuse_get_context()->gid) != 0)
 	{
@@ -193,6 +197,10 @@ static void unsharedfs_take_context_id()
  */
 static void unsharedfs_drop_context_id()
 {
+	// some internal fuse calls have an empty context:
+	if ( fuse_get_context()->pid == 0 )
+		return;
+
 	if ( seteuid(PRIVATE_DATA->base_uid) != 0)
 	{
 		char errmsg[ERRMSG_MAX];
