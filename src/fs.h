@@ -28,8 +28,8 @@
 #include <fuse.h>
 
 enum unsharedfs_fsmode {
-	UID_ONLY,
-	GID_ONLY
+	UID_ONLY   /* look up the "real" path based on the accessors uid */
+	,GID_ONLY  /* look up the "real" path based on the accessors gid */
 };
 		   
 
@@ -40,7 +40,7 @@ struct unsharedfs_state {
     char *rootdir;
 	char *defaultdir;
 	int allow_other_isset;
-	int fsmode;
+	enum unsharedfs_fsmode fsmode; 
 	int check_ownership;
 };
 
