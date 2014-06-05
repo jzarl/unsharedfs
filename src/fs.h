@@ -25,6 +25,7 @@
 #define FUSE_USE_VERSION 26
 
 #include <sys/types.h>
+#include <stdbool.h>
 #include <fuse.h>
 
 enum unsharedfs_fsmode {
@@ -39,9 +40,10 @@ struct unsharedfs_state {
 	gid_t base_gid;
     char *rootdir;
 	char *defaultdir;
-	int allow_other_isset;
+	bool allow_other_isset;
 	enum unsharedfs_fsmode fsmode; 
-	int check_ownership;
+	bool check_ownership;
+	bool use_syslog;
 };
 
 int unsharedfs_access(const char *path, int mask);

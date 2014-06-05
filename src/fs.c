@@ -62,7 +62,7 @@ void logmsg(int prio, const char *fmt, ...)
 	va_start( args, fmt);
 
 #ifdef HAVE_SYSLOG
-	if (prio > LOG_DEBUG)
+	if (prio > LOG_DEBUG && PRIVATE_DATA->use_syslog)
 		syslog(prio,fmt,args);
 #endif
 	// when in foreground-mode, this gets printed:

@@ -103,6 +103,7 @@ enum unsharedfs_opt_key {
 	KEY_NO_CHECK_OWNERSHIP,
 	KEY_USE_GID,
 	KEY_FUSE_PASSTHROUGH,
+	KEY_FUSE_DEBUG,
 };
 static const struct fuse_opt unsharedfs_options[] = {
 	// {char * template, int offset, int key}
@@ -113,7 +114,9 @@ static const struct fuse_opt unsharedfs_options[] = {
 	FUSE_OPT_KEY( "--no-check-ownership", KEY_NO_CHECK_OWNERSHIP),
 	FUSE_OPT_KEY( "--use-gid", KEY_USE_GID),
 	FUSE_OPT_KEY( "allow_other", KEY_ALLOW_OTHER),
-	FUSE_OPT_KEY( "debug", KEY_FUSE_PASSTHROUGH),
+	FUSE_OPT_KEY( "debug", KEY_FUSE_DEBUG),
+	FUSE_OPT_KEY( "-d", KEY_FUSE_DEBUG),
+	FUSE_OPT_KEY( "--debug", KEY_FUSE_DEBUG),
 	FUSE_OPT_KEY( "ro", KEY_FUSE_PASSTHROUGH),
 	FUSE_OPT_END
 };
@@ -163,24 +166,28 @@ static int unsharedfs_parse_options(void *data, const char *arg, int key, struct
 		}
 		break;
 		case KEY_NO_CHECK_OWNERSHIP:
-			pdata->check_ownership = 0;
+			pdata->check_ownership = false;
 			return 0;
 		break;
 		case KEY_USE_GID:
 			pdata->fsmode = GID_ONLY;
-			pdata->check_ownership = 0;
+			pdata->check_ownership = false;
 			return 0;
 		break;
 		case KEY_ALLOW_OTHER:
-			pdata->allow_other_isset = 1;
+			pdata->allow_other_isset = true;
 			return 1;
 		break;
+		case KEY_FUSE_DEBUG:
+			// don't spam the syslog when debugging
+			pdata->use_syslog = false;
+			return 1;
 		// just forward fuse-specific options
 		case KEY_FUSE_PASSTHROUGH:
 			return 1;
 		break;
 		default:
-			if ( arg[0] != '-' && pdata->rootdir == 0 )
+			if ( arg[0] != '-' && pdata->rootdir == NULL )
 			{
 				pdata->rootdir = realpath(arg, NULL);
 				return 0;
@@ -204,8 +211,9 @@ int main(int argc, char *argv[])
 	// save original uid/gid:
 	pdata->base_uid = getuid();
 	pdata->base_gid = getgid();
-	pdata->check_ownership = 0;
+	pdata->check_ownership = false;
 	pdata->fsmode = UID_ONLY;
+	pdata->use_syslog = true;
 
 	if (fuse_opt_parse(&args, pdata, unsharedfs_options, unsharedfs_parse_options) == -1)
 	{
