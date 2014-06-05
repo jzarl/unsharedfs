@@ -184,7 +184,9 @@ static void unsharedfs_take_context_id()
 				,errmsg
 		   );
 	}
-	logmsg(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
+	logmsg(LOG_DEBUG,"take context (%d) uid/gid = %d/%d, euid/egid = %d/%d"
+		,fuse_get_context()->pid
+		,getuid(),getgid(),geteuid(),getegid());
 }
 /**
  * Drop the uid/gid of the current context.
@@ -213,7 +215,9 @@ static void unsharedfs_drop_context_id()
 				,errmsg
 		   );
 	}
-	logmsg(LOG_DEBUG,"uid/gid = %d/%d, euid/egid = %d/%d",getuid(),getgid(),geteuid(),getegid());
+	logmsg(LOG_DEBUG,"drop context (%d) uid/gid = %d/%d, euid/egid = %d/%d"
+		,fuse_get_context()->pid
+		,getuid(),getgid(),geteuid(),getegid());
 }
 
 /** Get file attributes.
@@ -274,10 +278,9 @@ int unsharedfs_readlink(const char *path, char *link, size_t size)
 
 /** Create a file node
  *
- * There is no create() operation, mknod() will be called for
- * creation of all non-directory, non-symlink nodes.
+ * This is called for creation of all non-directory, non-symlink nodes.
+ * If the filesystem defines a create() method, then for regular files that will be called instead.
  */
-// shouldn't that comment be "if" there is no.... ?
 int unsharedfs_mknod(const char *path, mode_t mode, dev_t dev)
 {
 	int retstat = 0;
