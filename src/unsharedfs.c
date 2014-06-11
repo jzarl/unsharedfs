@@ -234,6 +234,9 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	// disable umask
+	umask(0);
+
 	// turn over control to fuse
 	fuse_stat = fuse_main(args.argc, args.argv, &unsharedfs_operations, pdata);
 	if ( fuse_stat != 0 )
