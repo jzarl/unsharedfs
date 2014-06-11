@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/fsuid.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <sys/stat.h>
@@ -165,32 +166,32 @@ static void unsharedfs_take_context_id()
 	if ( fuse_get_context()->pid == 0 )
 		return;
 
-	// Set gid first, because we won't be able after setting the uid.
-	if ( setegid(fuse_get_context()->gid) != 0)
+	// from the manpage:
+	// On success, the previous value of fsgid is returned.  On error, the current value of fsgid is returned.
+	if ( setfsgid(fuse_get_context()->gid) != PRIVATE_DATA->base_gid)
 	{
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		logmsg(LOG_WARNING,"unsharedfs_take_context_id: failed to set egid from %d to %d: %s"
-				,getegid()
+		logmsg(LOG_WARNING,"unsharedfs_take_context_id: failed to set fsgid from %d to %d: %s"
+				,PRIVATE_DATA->base_gid
 				,fuse_get_context()->gid
 				,errmsg
 		   );
 	}
-	if ( seteuid(fuse_get_context()->uid) != 0 )
+	// from the manpage:
+	// On success, the previous value of fsuid is returned.  On error, the current value of fsuid is returned.
+	if ( setfsuid(fuse_get_context()->uid) != PRIVATE_DATA->base_uid )
 	{
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		logmsg(LOG_WARNING,"unsharedfs_take_context_id: failed to set euid from %d to %d: %s"
-				,geteuid()
+		logmsg(LOG_WARNING,"unsharedfs_take_context_id: failed to set fsuid from %d to %d: %s"
+				,PRIVATE_DATA->base_uid
 				,fuse_get_context()->uid
 				,errmsg
 		   );
 	}
-	logmsg(LOG_DEBUG,"take context (%d) uid/gid = %d/%d, euid/egid = %d/%d"
-		,fuse_get_context()->pid
-		,getuid(),getgid(),geteuid(),getegid());
 }
 /**
  * Drop the uid/gid of the current context.
@@ -201,31 +202,28 @@ static void unsharedfs_drop_context_id()
 	if ( fuse_get_context()->pid == 0 )
 		return;
 
-	if ( seteuid(PRIVATE_DATA->base_uid) != 0)
+	if ( setfsuid(PRIVATE_DATA->base_uid) != fuse_get_context()->uid )
 	{
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
-		logmsg(LOG_WARNING,"unsharedfs_drop_context_id: failed to set euid from %d to %d: %s"
-				,geteuid()
+		logmsg(LOG_WARNING,"unsharedfs_drop_context_id: failed to set fsuid from %d to %d: %s"
 				,fuse_get_context()->uid
+				,PRIVATE_DATA->base_uid
 				,errmsg
 		   );
 	}
-	if ( setegid(PRIVATE_DATA->base_gid) != 0)
+	if ( setfsgid(PRIVATE_DATA->base_gid) != fuse_get_context()->gid)
 	{
 		char errmsg[ERRMSG_MAX];
 		if ( strerror_r(errno, errmsg,ERRMSG_MAX) != 0 )
 			errmsg[0] = '\0';
 		logmsg(LOG_WARNING,"unsharedfs_drop_context_id: failed to set egid from %d to %d: %s"
-				,getegid()
 				,fuse_get_context()->gid
+				,PRIVATE_DATA->base_gid
 				,errmsg
 		   );
 	}
-	logmsg(LOG_DEBUG,"drop context (%d) uid/gid = %d/%d, euid/egid = %d/%d"
-		,fuse_get_context()->pid
-		,getuid(),getgid(),geteuid(),getegid());
 }
 
 /** Get file attributes.
