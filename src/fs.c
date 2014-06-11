@@ -957,7 +957,9 @@ int unsharedfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 		return -errno;
 
 	unsharedfs_take_context_id();
-	fd = creat(fpath, mode);
+	// fd = creat(fpath, mode);
+	// some programs seemingly don't cope well with O_WRONLY
+	fd = open(fpath, O_CREAT | O_EXCL | O_RDWR, mode);
 	unsharedfs_drop_context_id();
 	if (fd < 0)
 		retstat = -errno;
