@@ -23,6 +23,8 @@
 
 // for utimensat
 #define _XOPEN_SOURCE 700
+// for vsyslog
+#define _BSD_SOURCE
 
 #include "fs.h"
 
@@ -64,7 +66,7 @@ void logmsg(int prio, const char *fmt, ...)
 
 #ifdef HAVE_SYSLOG
 	if (prio < LOG_DEBUG && PRIVATE_DATA->use_syslog)
-		syslog(prio,fmt,args);
+		vsyslog(prio,fmt,args);
 #endif
 	// when in foreground-mode, this gets printed:
 	vfprintf(stderr,fmt,args);
@@ -896,15 +898,16 @@ void *unsharedfs_init(struct fuse_conn_info *conn)
 void unsharedfs_destroy(void *userdata)
 {
 	struct unsharedfs_state *pdata = (struct unsharedfs_state*) userdata;
-	logmsg(LOG_INFO,"releasing unsharedfs at %s",pdata->rootdir);
-	// not strictly necessary, since the memory is freed on exit, anyways:
-	free(pdata->rootdir);
-	free(pdata->defaultdir);
-	free(pdata);
 
+	logmsg(LOG_INFO,"releasing unsharedfs at %s",pdata->rootdir);
 #ifdef HAVE_SYSLOG
 	closelog();
 #endif
+
+	// not strictly necessary, since the memory is freed on exit anyways:
+	free(pdata->rootdir);
+	free(pdata->defaultdir);
+	free(pdata);
 }
 
 /**
