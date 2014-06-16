@@ -50,11 +50,11 @@
 #define PRIVATE_DATA ((struct unsharedfs_state *) fuse_get_context()->private_data)
 
 #ifndef HAVE_SYSLOG
-#	define LOG_DEBUG 0
-#	define LOG_INFO 1
-#	define LOG_NOTICE 2
-#	define LOG_WARNING 3
-#	define LOG_ERR 4
+#	define LOG_ERR     0
+#	define LOG_WARNING 1
+#	define LOG_NOTICE  2
+#	define LOG_INFO    3
+#	define LOG_DEBUG   4
 #endif
 
 void logmsg(int prio, const char *fmt, ...)
@@ -63,7 +63,7 @@ void logmsg(int prio, const char *fmt, ...)
 	va_start( args, fmt);
 
 #ifdef HAVE_SYSLOG
-	if (prio > LOG_DEBUG && PRIVATE_DATA->use_syslog)
+	if (prio < LOG_DEBUG && PRIVATE_DATA->use_syslog)
 		syslog(prio,fmt,args);
 #endif
 	// when in foreground-mode, this gets printed:
@@ -896,6 +896,7 @@ void *unsharedfs_init(struct fuse_conn_info *conn)
 void unsharedfs_destroy(void *userdata)
 {
 	struct unsharedfs_state *pdata = (struct unsharedfs_state*) userdata;
+	logmsg(LOG_INFO,"releasing unsharedfs at %s",pdata->rootdir);
 	// not strictly necessary, since the memory is freed on exit, anyways:
 	free(pdata->rootdir);
 	free(pdata->defaultdir);
