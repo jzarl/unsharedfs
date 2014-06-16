@@ -1,0 +1,6 @@
+Changes since unsharedfs 1.0:
+  - Fix race condition that messed up file ownership
+  - Fix broken implementation for rename and link
+  - Adopt implementation of creat to real-life usage
+  - Don't inherit umask from mount user
+  - Code cleanups
