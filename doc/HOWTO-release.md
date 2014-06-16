@@ -16,6 +16,10 @@ Steps
     ```C++
 #define UNSHAREDFS_VERSION_STRING "unsharedfs 1.1git"
 	```
+	becomes:
+    ```C++
+#define UNSHAREDFS_VERSION_STRING "unsharedfs 1.1"
+	```
 
  2. Update docs:
     ```
@@ -35,6 +39,10 @@ Steps
     E.g. "1.1" becomes "1.2git" in src/unsharedfs.c:
     ```C++
 #define UNSHAREDFS_VERSION_STRING "unsharedfs 1.1"
+	```
+	becomes:
+    ```C++
+#define UNSHAREDFS_VERSION_STRING "unsharedfs 1.2git"
 	```
 
 
