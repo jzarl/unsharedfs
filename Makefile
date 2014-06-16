@@ -20,7 +20,7 @@ install:
 	$(INSTALL_PROG) -D src/unsharedfs $(PREFIX)/sbin/unsharedfs
 	$(INSTALL_SCRIPT) -D scripts/unsharedfs-prepare $(PREFIX)/sbin/unsharedfs-prepare
 	mkdir -p $(PREFIX)/share/doc/unsharedfs
-	$(INSTALL_FILE) -t $(PREFIX)/share/doc/unsharedfs README.md COPYING
+	$(INSTALL_FILE) -t $(PREFIX)/share/doc/unsharedfs README.md COPYING doc/changelog.txt
 	$(INSTALL_FILE) -D doc/unsharedfs.8.gz  $(PREFIX)/share/man/man8/unsharedfs.8.gz
 
 .PHONY: uninstall
@@ -28,6 +28,7 @@ uninstall:
 	rm -f $(PREFIX)/sbin/unsharedfs
 	rm -f $(PREFIX)/sbin/unsharedfs-prepare
 	rm -rf $(PREFIX)/share/doc/unsharedfs
+	rm -f $(PREFIX)/share/man/man8/unsharedfs.8.gz
 
 .PHONY: clean
 clean:
