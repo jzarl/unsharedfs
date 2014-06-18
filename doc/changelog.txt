@@ -1,6 +1,11 @@
+Changed since unsharedfs 1.1:
+ - Make target "install" depend on "all"
+ - Fix compilation with fuse 2.7
+ - Bump FUSE_USE_VERSION to 27
+
 Changes since unsharedfs 1.0:
-  - Fix race condition that messed up file ownership
-  - Fix broken implementation for rename and link
-  - Adopt implementation of creat to real-life usage
-  - Don't inherit umask from mount user
-  - Code cleanups
+ - Fix race condition that messed up file ownership
+ - Fix broken implementation for rename and link
+ - Adopt implementation of creat to real-life usage
+ - Don't inherit umask from mount user
+ - Code cleanups
