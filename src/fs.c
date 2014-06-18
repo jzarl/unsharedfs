@@ -16,11 +16,6 @@
  * A copy of that code is included in the file fuse.h
  */
 
-// The FUSE API has been changed a number of times.  So, our code
-// needs to define the version of the API that we assume.  As of this
-// writing, the most current API version is 26
-#define FUSE_USE_VERSION 26
-
 // for utimensat
 #define _XOPEN_SOURCE 700
 // for vsyslog
