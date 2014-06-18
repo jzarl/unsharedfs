@@ -32,7 +32,7 @@ Steps
     ```
 	#git add ...
 	git commit
-	git tag unsharedfs-1.1
+	git tag 1.1
 	```
   
  5. Update version string for next release:
