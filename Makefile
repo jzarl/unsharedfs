@@ -16,7 +16,7 @@ all: src/unsharedfs
 src/unsharedfs: src/unsharedfs.o src/fs.o
 
 .PHONY: install
-install:
+install: all
 	$(INSTALL_PROG) -D src/unsharedfs $(PREFIX)/sbin/unsharedfs
 	$(INSTALL_SCRIPT) -D scripts/unsharedfs-prepare $(PREFIX)/sbin/unsharedfs-prepare
 	mkdir -p $(PREFIX)/share/doc/unsharedfs
