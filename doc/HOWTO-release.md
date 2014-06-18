@@ -32,8 +32,9 @@ Steps
     ```
 	#git add ...
 	git commit
-	git tag 1.1
+	git tag -a 1.1
 	```
+	Using an annotated tag causes ```git describe``` to use it in its description.
   
  5. Update version string for next release:
     E.g. "1.1" becomes "1.2git" in src/unsharedfs.c:
