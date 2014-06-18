@@ -27,6 +27,10 @@ Steps
 	```
 
  3. Update changelog in doc/changelog.txt
+    The commit log might be an inspiration:
+	```
+	git log --oneline 1.0..
+	```
  
  4. Commit and tag
     ```
