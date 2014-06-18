@@ -46,5 +46,11 @@ Steps
 #define UNSHAREDFS_VERSION_STRING "unsharedfs 1.2git"
 	```
 
+ 6. Push
+    Remember to push the tags as well:
+	```
+	git push --tags
+	```
+
 
  
