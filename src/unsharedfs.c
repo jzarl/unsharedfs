@@ -61,8 +61,12 @@ static const struct fuse_operations unsharedfs_operations = {
 	.ftruncate = unsharedfs_ftruncate,
 	.fgetattr = unsharedfs_fgetattr,
 	//TODO: .fallocate
-	.flag_nopath = 1,
+#if ( FUSE_VERSION >= 28 )
 	.flag_nullpath_ok = 1,
+#endif
+#if ( FUSE_VERSION >= 29 )
+	.flag_nopath = 1,
+#endif
 };
 
 static void unsharedfs_usage()
